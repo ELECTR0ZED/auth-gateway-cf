@@ -58,8 +58,8 @@ export abstract class AuthProvider {
 	): string {
 		const authorize = this.getAuthorizeEndpoint(cfg);
 		const scope = this.getDefaultScope(cfg);
-		const redirectUri = encodeURIComponent(this.getRedirectUri(baseUrl));
-		const stateParam = returnTo ? encodeURIComponent(state + "::" + returnTo) : state;
+		const redirectUri = this.getRedirectUri(baseUrl);
+		const stateParam = returnTo ? state + "::" + returnTo : state;
 
 		const qp = new URLSearchParams({
 			client_id: cfg.clientId,

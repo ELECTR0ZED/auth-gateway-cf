@@ -5,7 +5,7 @@ export class DiscordProvider extends AuthProvider {
 	id = "discord" as const;
 
 	protected getAuthorizeEndpoint(_: ProviderConfig): string {
-		return "https://discord.com/api/oauth2/authorize";
+		return "https://discord.com/oauth2/authorize";
 	}
 
 	protected getTokenEndpoint(_: ProviderConfig): string {
