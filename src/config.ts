@@ -2,8 +2,8 @@ import { env } from "cloudflare:workers";
 import type { ProjectConfig } from "./core/types";
 
 export const CONFIG: ProjectConfig = {
-	projectName: "my-single-project",
-	publicBaseUrl: "http://127.0.0.1:8787",
+	projectName: "demo-project",
+	publicBaseUrl: "https://auth-microservice.electr0zed.workers.dev",
 	providers: [
 		{
 			id: "discord",
