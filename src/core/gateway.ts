@@ -47,7 +47,7 @@ export class Gateway {
 
 		// 5) Forward to FE or API via service bindings, with signed user + short-lived access token
 		const headers = new Headers(request.headers);
-		if (session) attachSignedUser(headers, session, this.cfg, this.env);
+		if (session) await attachSignedUser(headers, session, this.cfg, this.env);
 		else stripUser(headers, this.cfg);
 		if (accessJwt) headers.set("X-Access-Token", accessJwt);
 
