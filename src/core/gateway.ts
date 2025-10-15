@@ -1,4 +1,4 @@
-import type { Env, ProjectConfig } from "./types";
+import type { ProjectConfig } from "./types";
 import { CONFIG } from "../config";
 import { RouteMatcher } from "../routing/routeMatcher";
 import {
@@ -50,18 +50,22 @@ export class Gateway {
 		else stripUser(headers, this.cfg);
 		if (accessJwt) headers.set("X-Access-Token", accessJwt);
 
-		const target = url.pathname.startsWith("/api/") ? this.env.API : this.env.FE;
-		const fwdReq = new Request(
-			new URL(url.pathname + url.search, "http://internal"),
-			{
-				method: request.method,
-				headers,
-				body: request.body,
-				redirect: "manual",
-				// @ts-expect-error – Workers streaming bodies
-				duplex: "half",
-			}
-		);
+		const binding = rule.service;
+		const target = (this.env as any)[binding] as Service | undefined;
+
+		if (!target || typeof (target as any).fetch !== "function") {
+		// Misconfigured route or missing binding
+		return new Response(`Bad route: service binding "${binding}" not available`, { status: 502 });
+		}
+
+		const fwdReq = new Request(new URL(url.pathname + url.search, "http://internal"), {
+		method: request.method,
+		headers,
+		body: request.body,
+		redirect: "manual",
+		// @ts-expect-error – Workers streaming bodies
+		duplex: "half",
+		});
 		return target.fetch(fwdReq);
 	}
 
@@ -83,11 +87,11 @@ export class Gateway {
 		const url = new URL(request.url);
 
 		if (url.pathname === "/auth/login") {
-			const provider = this.pickProvider(url.searchParams.get("provider") ?? undefined);
+			const { impl, cfg } = this.pickProvider(url.searchParams.get("provider") ?? undefined);
 			const { state, codeChallenge, verifier } = await makePkceState();
 			await saveShortState(this.env.AUTH_KV, state, verifier, 300);
-			const loginUrl = provider.loginURL(
-				provider.config!,
+			const loginUrl = impl.loginURL(
+				cfg,
 				this.cfg.publicBaseUrl,
 				state,
 				codeChallenge,
@@ -97,20 +101,15 @@ export class Gateway {
 		}
 
 		if (url.pathname === "/auth/callback") {
-			const provider = this.pickProvider(url.searchParams.get("provider") ?? undefined);
+			const { impl, cfg } = this.pickProvider(url.searchParams.get("provider") ?? undefined);
 			const code = url.searchParams.get("code")!;
 			const { verifier, returnTo } = await consumeShortState(
 				this.env.AUTH_KV,
 				url.searchParams.get("state")!
 			);
 			const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
-			const res = await provider.exchangeCode(
-				provider.config!,
-				this.env,
-				code,
-				verifier,
-				redirectUri
-			);
+			const res = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);
+
 
 			// Issue session cookie (JWT or DO) and optional access token cookie
 			const strat = this.makeSessionStrategy();
@@ -147,11 +146,15 @@ export class Gateway {
 			(explicit as any) ||
 			this.cfg.defaultProvider ||
 			this.cfg.providers.find((p) => p.enabled)?.id;
-		const p = this.cfg.providers.find((p) => p.id === id);
-		if (!p) throw new Error("No provider available");
-		const adapter = ProviderRegistry[p.id];
-		if (!adapter) throw new Error(`No adapter for provider ${p.id}`);
-		return adapter;
+
+		const cfg = this.cfg.providers.find((p) => p.id === id && p.enabled);
+		if (!cfg) throw new Error("No provider available");
+
+		const impl = ProviderRegistry[cfg.id];
+		if (!impl) throw new Error(`No adapter for provider ${cfg.id}`);
+
+		// Return instance + its config separately (no spreading!)
+		return { impl, cfg };
 	}
 
 	private authorize(rule: any, session: any): boolean {

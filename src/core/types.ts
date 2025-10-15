@@ -3,59 +3,52 @@ export type LoginProviderId = "azure_b2c" | "discord" | "github" | "google" | "e
 export type Match = { path: string | RegExp; methods?: string[] };
 
 export type RouteRule = {
-  name?: string;
-  match: Match | Match[];
-  auth: "required" | "optional" | "none";
-  rolesAny?: string[];
-  rolesAll?: string[];
-  scopesAny?: string[];
-  allowIf?: string[]; // e.g., ["webhook:github"]
+	name?: string;
+	match: Match | Match[];
+	auth: "required" | "optional" | "none";
+	service: string;
+	rolesAny?: string[];
+	rolesAll?: string[];
+	scopesAny?: string[];
+	allowIf?: string[]; // e.g., ["webhook:github"]
 };
 
 export type ProviderConfig = {
-  id: LoginProviderId;
-  enabled: boolean;
-  label?: string;
-  clientId: string;
-  clientSecretEnv?: string; // env var name
-  issuer?: string;
-  authUrl?: string;
-  tokenUrl?: string;
-  userInfoUrl?: string;
-  scope?: string; // "openid profile email"
-  tenant?: string; // Azure B2C
-  b2cPolicy?: string; // Azure B2C user flow
+	id: LoginProviderId;
+	enabled: boolean;
+	label?: string;
+	clientId: string;
+	clientSecretEnv?: string; // env var name
+	issuer?: string;
+	authUrl?: string;
+	tokenUrl?: string;
+	userInfoUrl?: string;
+	scope?: string; // "openid profile email"
+	tenant?: string; // Azure B2C
+	b2cPolicy?: string; // Azure B2C user flow
 };
 
 export type SessionStrategyCfg =
-  | { kind: "jwt"; cookieName?: string; expMinutes?: number; jwtSecretEnv: string }
-  | { kind: "handle"; cookieName?: string; doName: "SESSION_DO" };
+	| { kind: "jwt"; cookieName?: string; expMinutes?: number; jwtSecretEnv: string }
+	| { kind: "handle"; cookieName?: string; doName: "SESSION_DO" };
 
 export type PropagationCfg = {
-  headerName?: string;
-  sigHeaderName?: string;
-  hmacSecretEnv: string;
+	headerName?: string;
+	sigHeaderName?: string;
+	hmacSecretEnv: string;
 };
 
 export type ProjectConfig = {
-  projectName: string;
-  publicBaseUrl: string;
-  routes: RouteRule[];
-  providers: ProviderConfig[];
-  defaultProvider?: LoginProviderId;
-  session: SessionStrategyCfg;
-  propagation: PropagationCfg;
+	projectName: string;
+	publicBaseUrl: string;
+	routes: RouteRule[];
+	providers: ProviderConfig[];
+	defaultProvider?: LoginProviderId;
+	session: SessionStrategyCfg;
+	propagation: PropagationCfg;
 };
 
-export type Env = {
-  FE: Service;
-  API: Service;
-  AUTH_KV: KVNamespace;
-  SESSION_DO: DurableObjectNamespace;
-  // secrets
-  AUTH_JWT_SECRET?: string;
-  ACCESS_JWT_SECRET?: string;
-  AUTH_HMAC_KEY?: string;
-  // provider secrets by name
-  [key: string]: any;
-};
+declare global {
+	interface Env {
+	}
+}

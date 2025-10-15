@@ -26,6 +26,12 @@
 			"binding": "AUTH_KV",
 			"id": "21349e8091a24f438e3b35bebc49ec72"
 		}
+	],
+	"services": [
+		{
+			"binding": "HWWORKER",
+			"service": "frosty-disk-f9f1"
+		}
 	]
 	/**
 	 * Environment Variables
@@ -41,9 +47,4 @@
 	 * https://developers.cloudflare.com/workers/static-assets/binding/
 	 */
 	// "assets": { "directory": "./public/", "binding": "ASSETS" }
-	/**
-	 * Service Bindings (communicate between multiple Workers)
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
-	 */
-	// "services": [{ "binding": "MY_SERVICE", "service": "my-service" }]
 }

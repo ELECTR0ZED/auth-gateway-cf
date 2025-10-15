@@ -17,8 +17,7 @@ export const CONFIG: ProjectConfig = {
 	session: { kind: "handle", cookieName: "__Host-sid", doName: "SESSION_DO" },
 	propagation: { headerName: "X-User", sigHeaderName: "X-User-Sig", hmacSecretEnv: "AUTH_HMAC_KEY" },
 	routes: [
-		{ match: [{ path: "/api**" }, { path: "/dashboard/**" }], auth: "required" },
-		{ match: { path: "/admin**" }, auth: "required" },
-		{ match: { path: "**" }, auth: "none" },
+		{ match: { path: "/admin**" }, auth: "required", service: "HWWORKER" },
+		{ match: { path: "**" }, auth: "none", service: "HWWORKER" },
 	]
 };
