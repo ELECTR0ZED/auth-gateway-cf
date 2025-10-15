@@ -10,7 +10,7 @@ import type { Match, RouteRule } from "../core/types";
 export class RouteMatcher {
 	private compiled: Array<{ rule: RouteRule; tests: Array<{ re: RegExp; methods?: string[] }> }>;
 
-	constructor(private rules: RouteRule[]) {
+	constructor(rules: RouteRule[]) {
 		this.compiled = rules.map(rule => {
 			const arr = Array.isArray(rule.match) ? rule.match : [rule.match];
 			const tests = arr.map(m => ({

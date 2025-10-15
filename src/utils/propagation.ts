@@ -1,10 +1,11 @@
 import type { ProjectConfig } from "../core/types";
+import { Session } from "../sessions";
 
 export async function attachSignedUser(
 	headers: Headers,
-	session: any,
+	session: Session,
 	cfg: ProjectConfig,
-	env: any
+	env: Env
 ) {
 	const name = cfg.propagation.headerName ?? "X-User";
 	const sigName = cfg.propagation.sigHeaderName ?? "X-User-Sig";

@@ -3,7 +3,7 @@ import { CONFIG } from "../config";
 import { RouteMatcher } from "../routing/routeMatcher";
 import {
 		JwtSessionStrategy,
-		HandleSessionStrategy,
+		DurableObjectSessionStrategy,
 		type SessionStrategy,
 } from "../sessions";
 import { ProviderRegistry } from "../providers";
@@ -50,21 +50,20 @@ export class Gateway {
 		else stripUser(headers, this.cfg);
 		if (accessJwt) headers.set("X-Access-Token", accessJwt);
 
-		const binding = rule.service;
-		const target = (this.env as any)[binding] as Service | undefined;
+		const target = rule.service;
 
-		if (!target || typeof (target as any).fetch !== "function") {
-		// Misconfigured route or missing binding
-		return new Response(`Bad route: service binding "${binding}" not available`, { status: 502 });
+		if (!target) {
+			// Misconfigured route or missing binding
+			return new Response(`Bad route: service binding not available`, { status: 502 });
 		}
 
 		const fwdReq = new Request(new URL(url.pathname + url.search, "http://internal"), {
-		method: request.method,
-		headers,
-		body: request.body,
-		redirect: "manual",
-		// @ts-expect-error – Workers streaming bodies
-		duplex: "half",
+			method: request.method,
+			headers,
+			body: request.body,
+			redirect: "manual",
+			// @ts-expect-error – Workers streaming bodies
+			duplex: "half",
 		});
 		return target.fetch(fwdReq);
 	}
@@ -72,8 +71,8 @@ export class Gateway {
 	private makeSessionStrategy(): SessionStrategy {
 		if (this.cfg.session.kind === "jwt")
 			return new JwtSessionStrategy(this.cfg.session);
-		if (this.cfg.session.kind === "handle")
-			return new HandleSessionStrategy(this.cfg.session);
+		if (this.cfg.session.kind === "durableObject")
+			return new DurableObjectSessionStrategy(this.cfg.session);
 		// Fallback
 		return new JwtSessionStrategy({
 			kind: "jwt",

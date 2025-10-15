@@ -1,3 +1,4 @@
+import { env } from "cloudflare:workers";
 import type { ProjectConfig } from "./core/types";
 
 export const CONFIG: ProjectConfig = {
@@ -10,14 +11,35 @@ export const CONFIG: ProjectConfig = {
 			label: "Discord",
 			clientId: "1425964712431980625",
 			clientSecretEnv: "DISCORD_CLIENT_SECRET",
-			scope: "identify email"
+			scope: "identify email",
 		}
 	],
 	defaultProvider: "discord",
-	session: { kind: "handle", cookieName: "__Host-sid", doName: "SESSION_DO" },
-	propagation: { headerName: "X-User", sigHeaderName: "X-User-Sig", hmacSecretEnv: "AUTH_HMAC_KEY" },
+	session: {
+		kind: "durableObject",
+		cookieName: "__Host-sid",
+		doName: env.SESSION_DO,
+		jwtSecretEnv: "SESSION_JWT_SECRET",
+	},
+	propagation: {
+		headerName: "X-User",
+		sigHeaderName: "X-User-Sig",
+		hmacSecretEnv: "AUTH_HMAC_KEY",
+	},
 	routes: [
-		{ match: { path: "/admin**" }, auth: "required", service: "HWWORKER" },
-		{ match: { path: "**" }, auth: "none", service: "HWWORKER" },
+		{
+			match: {
+				path: "/admin**",
+			},
+			auth: "required",
+			service: env.HWWORKER,
+		},
+		{
+			match: {
+				path: "**",
+			},
+			auth: "none",
+			service: env.HWWORKER,
+		},
 	]
 };

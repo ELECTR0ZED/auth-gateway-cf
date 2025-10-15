@@ -32,7 +32,15 @@
 			"binding": "HWWORKER",
 			"service": "frosty-disk-f9f1"
 		}
-	]
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SESSION_DO",
+				"class_name": "SessionDo"
+			}
+		]
+	},
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables

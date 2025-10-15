@@ -30,7 +30,7 @@ export class GitHubProvider extends AuthProvider {
 	// GitHub does NOT issue id_token; override exchangeCode to set Accept header
 	async exchangeCode(
 		cfg: ProviderConfig,
-		env: any,
+		env: Env,
 		code: string,
 		codeVerifier: string, // PKCE is supported for GH Apps/OAuth apps when enabled; unused is fine
 		redirectUri: string

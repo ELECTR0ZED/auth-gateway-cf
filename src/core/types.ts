@@ -1,3 +1,5 @@
+export {};
+
 export type LoginProviderId = "azure_b2c" | "discord" | "github" | "google" | "entra";
 
 export type Match = { path: string | RegExp; methods?: string[] };
@@ -6,7 +8,7 @@ export type RouteRule = {
 	name?: string;
 	match: Match | Match[];
 	auth: "required" | "optional" | "none";
-	service: string;
+	service: Fetcher;
 	rolesAny?: string[];
 	rolesAll?: string[];
 	scopesAny?: string[];
@@ -29,8 +31,18 @@ export type ProviderConfig = {
 };
 
 export type SessionStrategyCfg =
-	| { kind: "jwt"; cookieName?: string; expMinutes?: number; jwtSecretEnv: string }
-	| { kind: "handle"; cookieName?: string; doName: "SESSION_DO" };
+	| {
+		kind: "jwt";
+		cookieName?: string;
+		expMinutes?: number;
+		jwtSecretEnv: string;
+	}
+	| {
+		kind: "durableObject";
+		cookieName?: string;
+		doName: DurableObjectNamespace;
+		jwtSecretEnv: string;
+	};
 
 export type PropagationCfg = {
 	headerName?: string;
@@ -50,5 +62,6 @@ export type ProjectConfig = {
 
 declare global {
 	interface Env {
+		[key: string]: string | undefined;
 	}
 }

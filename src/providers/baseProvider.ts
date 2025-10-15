@@ -40,7 +40,7 @@ export abstract class AuthProvider {
 		return `${baseUrl}/auth/callback`;
 	}
 
-	protected getClientSecret(env: any, cfg: ProviderConfig): string | undefined {
+	protected getClientSecret(env: Env, cfg: ProviderConfig): string | undefined {
 		const key = cfg.clientSecretEnv;
 		return key ? env[key] : undefined;
 	}
@@ -79,7 +79,7 @@ export abstract class AuthProvider {
 	 */
 	async exchangeCode(
 		cfg: ProviderConfig,
-		env: any,
+		env: Env,
 		code: string,
 		codeVerifier: string,
 		redirectUri: string
