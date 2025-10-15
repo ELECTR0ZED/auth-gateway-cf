@@ -3,7 +3,6 @@ import type { ProjectConfig } from "../core/types";
 export type Session = {
 	sub: string;
 	email?: string;
-	roles?: string[];
 	claims?: Record<string, any>;
 };
 

@@ -37,7 +37,7 @@ export class Gateway {
 		const { session, accessJwt } = await strat.resolve(request, this.env, this.cfg);
 
 		// 4) Authorization
-		if (rule.auth === "required" && !this.authorize(rule, session)) {
+		if (rule.auth === "required" && !session) {
 			const returnTo = encodeURIComponent(url.pathname + url.search);
 			return Response.redirect(
 				`${this.cfg.publicBaseUrl}/auth/login?returnTo=${returnTo}`,
@@ -155,13 +155,5 @@ export class Gateway {
 
 		// Return instance + its config separately (no spreading!)
 		return { impl, cfg };
-	}
-
-	private authorize(rule: RouteRule, session: Session|null): boolean {
-		if (!session) return false;
-		const roles = new Set(session.roles ?? []);
-		if (rule.rolesAll && !rule.rolesAll.every((r: string) => roles.has(r))) return false;
-		if (rule.rolesAny && !rule.rolesAny.some((r: string) => roles.has(r))) return false;
-		return true;
 	}
 }

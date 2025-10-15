@@ -142,8 +142,7 @@ export abstract class AuthProvider {
 
 	protected normalize(claims: any): Session {
 		const email = claims?.email || claims?.emails?.[0];
-		const roles = (claims?.roles as string[] | undefined) ?? (claims?.groups as string[] | undefined) ?? [];
-		return { sub: claims.sub, email, roles, claims };
+		return { sub: claims.sub, email, claims };
 	}
 
 	protected parseJwt(token: string): any {

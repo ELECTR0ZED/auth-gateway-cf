@@ -1,5 +1,3 @@
-export {};
-
 export type LoginProviderId = "azure_b2c" | "discord" | "github" | "google" | "entra";
 
 export type Match = { path: string | RegExp; methods?: string[] };
@@ -7,12 +5,8 @@ export type Match = { path: string | RegExp; methods?: string[] };
 export type RouteRule = {
 	name?: string;
 	match: Match | Match[];
-	auth: "required" | "optional" | "none";
+	auth: "required" | "none";
 	service: Fetcher;
-	rolesAny?: string[];
-	rolesAll?: string[];
-	scopesAny?: string[];
-	allowIf?: string[]; // e.g., ["webhook:github"]
 };
 
 export type ProviderConfig = {

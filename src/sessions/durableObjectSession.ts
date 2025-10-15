@@ -28,7 +28,6 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 			{
 				sub: data.session.sub,
 				email: data.session.email,
-				roles: data.session.roles,
 				iat: now,
 				exp,
 			},
@@ -52,7 +51,6 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 			{
 				sub: session.sub,
 				email: session.email,
-				roles: session.roles,
 				iat: now,
 				exp,
 			},

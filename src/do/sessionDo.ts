@@ -2,7 +2,6 @@ import { DurableObject } from "cloudflare:workers"
 export interface StoredSession {
     sub: string;
     email?: string;
-    roles?: string[];
     claims?: Record<string, any>;
     createdAt: number;
     updatedAt: number;

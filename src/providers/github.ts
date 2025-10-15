@@ -76,8 +76,8 @@ export class GitHubProvider extends AuthProvider {
 	}
 
 	protected normalize(claims: any) {
-		// Map to your canonical session; GitHub has no roles by default
-		return { sub: claims.sub, email: claims.email, roles: [], claims };
+		// Map to your canonical session
+		return { sub: claims.sub, email: claims.email, claims };
 	}
 
 	private async fetchGitHubUser(token: string): Promise<GitHubUser> {

@@ -18,7 +18,6 @@ export class JwtSessionStrategy implements SessionStrategy {
 				session: {
 					sub: payload.sub,
 					email: payload.email,
-					roles: payload.roles,
 					claims: payload,
 				},
 			};
@@ -34,7 +33,6 @@ export class JwtSessionStrategy implements SessionStrategy {
 			{
 				sub: session.sub,
 				email: session.email,
-				roles: session.roles,
 				iat: now,
 				exp: now + expMinutes * 60,
 			},
