@@ -1,10 +1,11 @@
-import type { ProjectConfig } from "./types";
+import type { ProjectConfig, RouteRule } from "./types";
 import { CONFIG } from "../config";
 import { RouteMatcher } from "../routing/routeMatcher";
 import {
 		JwtSessionStrategy,
 		DurableObjectSessionStrategy,
 		type SessionStrategy,
+		type Session,
 } from "../sessions";
 import { ProviderRegistry } from "../providers";
 import { attachSignedUser, stripUser } from "../utils/propagation";
@@ -142,7 +143,7 @@ export class Gateway {
 
 	private pickProvider(explicit?: string) {
 		const id =
-			(explicit as any) ||
+			explicit ||
 			this.cfg.defaultProvider ||
 			this.cfg.providers.find((p) => p.enabled)?.id;
 
@@ -156,7 +157,7 @@ export class Gateway {
 		return { impl, cfg };
 	}
 
-	private authorize(rule: any, session: any): boolean {
+	private authorize(rule: RouteRule, session: Session|null): boolean {
 		if (!session) return false;
 		const roles = new Set(session.roles ?? []);
 		if (rule.rolesAll && !rule.rolesAll.every((r: string) => roles.has(r))) return false;
