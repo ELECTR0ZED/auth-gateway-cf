@@ -23,8 +23,16 @@
 		"bindings": [
 			{
 				"name": "SESSION_DO",
-				"class_name": "SessionDo"
+				"class_name": "SessionDO"
 			}
 		]
 	},
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": [
+				"SessionDO"
+			]
+		}
+	]
 }
