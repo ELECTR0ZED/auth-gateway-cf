@@ -20,9 +20,5 @@ export const CONFIG: ProjectConfig = {
 		{ match: [{ path: "/api**" }, { path: "/dashboard/**" }], auth: "required" },
 		{ match: { path: "/admin**" }, auth: "required" },
 		{ match: { path: "**" }, auth: "none" },
-	],
-	policies: {
-		beforeAuth: [],
-		afterAuth: []
-	}
+	]
 };

@@ -32,20 +32,19 @@ export type SessionStrategyCfg =
   | { kind: "handle"; cookieName?: string; doName: "SESSION_DO" };
 
 export type PropagationCfg = {
-  headerName?: string;      // default: X-User
-  sigHeaderName?: string;   // default: X-User-Sig
-  hmacSecretEnv: string;    // e.g. AUTH_HMAC_KEY
+  headerName?: string;
+  sigHeaderName?: string;
+  hmacSecretEnv: string;
 };
 
 export type ProjectConfig = {
   projectName: string;
-  publicBaseUrl: string;        // https://example.com
+  publicBaseUrl: string;
   routes: RouteRule[];
   providers: ProviderConfig[];
   defaultProvider?: LoginProviderId;
-  session: SessionStrategyCfg;  // choose "jwt" or "handle"
+  session: SessionStrategyCfg;
   propagation: PropagationCfg;
-  policies?: { beforeAuth?: string[]; afterAuth?: string[] };
 };
 
 export type Env = {
