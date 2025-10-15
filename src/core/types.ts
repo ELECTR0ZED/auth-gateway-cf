@@ -40,7 +40,7 @@ export type SessionStrategyCfg =
 	| {
 		kind: "durableObject";
 		cookieName?: string;
-		doName: DurableObjectNamespace;
+		doName: DurableObjectNamespace<import('../index').SessionDO>;
 		jwtSecretEnv: string;
 	};
 

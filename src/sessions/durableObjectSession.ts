@@ -8,7 +8,7 @@ import type { Session } from ".";
 export class DurableObjectSessionStrategy implements SessionStrategy {
 	constructor(private cfg: SessionStrategyCfg & { kind: "durableObject" }) {}
 
-	async resolve(request: Request, env: Env, tenant: ProjectConfig) {
+	async resolve(request: Request, env: Env) {
 		const sid = getCookie(request, this.cfg.cookieName ?? "__Host-sid");
 		if (!sid) return { session: null };
 

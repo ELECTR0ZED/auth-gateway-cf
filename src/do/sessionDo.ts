@@ -1,3 +1,4 @@
+import { DurableObject } from "cloudflare:workers"
 export interface StoredSession {
     sub: string;
     email?: string;
@@ -7,12 +8,11 @@ export interface StoredSession {
     updatedAt: number;
 }
 
-export class SessionDO {
-    private state: DurableObjectState;
+export class SessionDO extends DurableObject {
     private cache?: StoredSession;
 
-    constructor(state: DurableObjectState) {
-        this.state = state;
+    constructor(ctx: DurableObjectState, env: Env) {
+        super(ctx, env)
     }
 
     async fetch(req: Request): Promise<Response> {
@@ -24,25 +24,25 @@ export class SessionDO {
             }
             const now = Date.now();
             this.cache = { ...session, createdAt: now, updatedAt: now } as StoredSession;
-            await this.state.storage.put("session", this.cache);
+            await this.ctx.storage.put("session", this.cache);
             return json({ ok: true });
         }
 
         if (op === "get") {
             if (!this.cache) {
                 this.cache =
-                    (await this.state.storage.get<StoredSession>("session")) || undefined;
+                    (await this.ctx.storage.get<StoredSession>("session")) || undefined;
             }
             if (!this.cache) return json({ session: null });
 
             this.cache.updatedAt = Date.now();
-            await this.state.storage.put("session", this.cache);
+            await this.ctx.storage.put("session", this.cache);
             return json({ session: this.cache });
         }
 
         if (op === "delete") {
             this.cache = undefined;
-            await this.state.storage.delete("session");
+            await this.ctx.storage.delete("session");
             return json({ ok: true });
         }
 
