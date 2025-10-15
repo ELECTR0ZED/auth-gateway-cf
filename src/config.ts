@@ -29,7 +29,7 @@ export const CONFIG: ProjectConfig = {
 	routes: [
 		{
 			match: {
-				path: /^\/admin/
+				path: /^\/admin(?:\/|$)/
 			},
 			auth: "required",
 			service: env.HWWORKER,
