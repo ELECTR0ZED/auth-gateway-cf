@@ -1,4 +1,4 @@
-export type LoginProviderId = "azure_b2c" | "google" | "github" | "entra";
+export type LoginProviderId = "azure_b2c" | "discord" | "github" | "google" | "entra";
 
 export type Match = { path: string | RegExp; methods?: string[] };
 

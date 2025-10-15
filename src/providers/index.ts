@@ -6,9 +6,9 @@ import { DiscordProvider } from "./discord";
 import { MicrosoftEntraProvider } from "./microsoft";
 
 export const ProviderRegistry: Record<string, AuthProvider> = {
-  azure_b2c: new AzureB2CProvider(),
-  google: new GoogleProvider(),
-  github: new GitHubProvider(),
-  discord: new DiscordProvider(),
-  entra: new MicrosoftEntraProvider(),
+	azure_b2c: new AzureB2CProvider(),
+	google: new GoogleProvider(),
+	github: new GitHubProvider(),
+	discord: new DiscordProvider(),
+	entra: new MicrosoftEntraProvider(),
 };
