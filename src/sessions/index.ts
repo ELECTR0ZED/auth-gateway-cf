@@ -9,15 +9,13 @@ export type Session = {
 export interface SessionStrategy {
 	resolve(
 		request: Request,
-		env: Env,
-		cfg: ProjectConfig
+		env: Env
 	): Promise<{ session: Session | null; accessJwt?: string }>;
 	issue?(
 		session: Session,
-		env: Env,
-		cfg: ProjectConfig
+		env: Env
 	): Promise<{ cookie?: string; accessJwt?: string }>;
-	clear?(env: Env, cfg: ProjectConfig): { cookie: string };
+	clear?(env: Env): { cookie: string };
 }
 
 export function getCookie(req: Request, name: string) {

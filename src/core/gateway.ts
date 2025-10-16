@@ -1,11 +1,11 @@
-import type { ProjectConfig, RouteRule } from "./types";
+// core/gateway.ts
+import type { ProjectConfig } from "./types";
 import { CONFIG } from "../config";
 import { RouteMatcher } from "../routing/routeMatcher";
 import {
-		JwtSessionStrategy,
-		DurableObjectSessionStrategy,
-		type SessionStrategy,
-		type Session,
+	JwtSessionStrategy,
+	DurableObjectSessionStrategy,
+	type SessionStrategy,
 } from "../sessions";
 import { ProviderRegistry } from "../providers";
 import { attachSignedUser, stripUser } from "../utils/propagation";
@@ -34,7 +34,7 @@ export class Gateway {
 
 		// 3) Session resolution
 		const strat = this.makeSessionStrategy();
-		const { session, accessJwt } = await strat.resolve(request, this.env, this.cfg);
+		const { session, accessJwt } = await strat.resolve(request, this.env);
 
 		// 4) Authorization
 		if (rule.auth === "required" && !session) {
@@ -52,9 +52,7 @@ export class Gateway {
 		if (accessJwt) headers.set("X-Access-Token", accessJwt);
 
 		const target = rule.service;
-
 		if (!target) {
-			// Misconfigured route or missing binding
 			return new Response(`Bad route: service binding not available`, { status: 502 });
 		}
 
@@ -110,14 +108,13 @@ export class Gateway {
 			const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
 			const res = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);
 
-
 			// Issue session cookie (JWT or DO) and optional access token cookie
 			const strat = this.makeSessionStrategy();
 			const response = new Response(null, {
 				status: 302,
 				headers: { Location: returnTo || "/" },
 			});
-			const issued = await strat.issue?.(res.session, this.env, this.cfg);
+			const issued = await strat.issue?.(res.session, this.env);
 			if (issued?.cookie) response.headers.append("Set-Cookie", issued.cookie);
 			if (issued?.accessJwt)
 				response.headers.append(
@@ -133,7 +130,7 @@ export class Gateway {
 				status: 302,
 				headers: { Location: "/" },
 			});
-			const cleared = strat.clear?.(this.env, this.cfg);
+			const cleared = strat.clear?.(this.env);
 			if (cleared?.cookie) r.headers.append("Set-Cookie", cleared.cookie);
 			return r;
 		}
@@ -145,15 +142,14 @@ export class Gateway {
 		const id =
 			explicit ||
 			this.cfg.defaultProvider ||
-			this.cfg.providers.find((p) => p.enabled)?.id;
+			this.cfg.providers.find(p => p.enabled)?.id;
 
-		const cfg = this.cfg.providers.find((p) => p.id === id && p.enabled);
+		const cfg = this.cfg.providers.find(p => p.id === id && p.enabled);
 		if (!cfg) throw new Error("No provider available");
 
 		const impl = ProviderRegistry[cfg.id];
 		if (!impl) throw new Error(`No adapter for provider ${cfg.id}`);
 
-		// Return instance + its config separately (no spreading!)
 		return { impl, cfg };
 	}
 }

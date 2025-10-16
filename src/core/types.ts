@@ -36,6 +36,10 @@ export type SessionStrategyCfg =
 		cookieName?: string;
 		doName: DurableObjectNamespace<import('../index').SessionDO>;
 		jwtSecretEnv: string;
+		idleTtlSec?: number;
+		absoluteTtlSec?: number;
+		issuer?: string;
+		audience?: string;
 	};
 
 export type PropagationCfg = {
@@ -49,10 +53,18 @@ export type ProjectConfig = {
 	publicBaseUrl: string;
 	routes: RouteRule[];
 	providers: ProviderConfig[];
-	defaultProvider?: LoginProviderId;
+	defaultProvider: LoginProviderId;
 	session: SessionStrategyCfg;
 	propagation: PropagationCfg;
 };
+
+export interface StoredSession {
+    sub: string;
+    email?: string;
+    claims?: Record<string, any>;
+    createdAt: number;
+    updatedAt: number;
+}
 
 declare global {
 	interface Env {

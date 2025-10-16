@@ -1,3 +1,4 @@
+// utils/propagation.ts
 import type { ProjectConfig } from "../core/types";
 import { Session } from "../sessions";
 
@@ -12,8 +13,11 @@ export async function attachSignedUser(
 	const secret = env[cfg.propagation.hmacSecretEnv];
 	if (!secret) throw new Error("Missing HMAC secret");
 
-	const payload = btoa(JSON.stringify(session));
-	const sig = await signHmac(payload, secret);
+	// Include a timestamp to prevent replay across services; receiver should enforce max age (e.g., 60s)
+	const payloadObj = { session, ts: Math.floor(Date.now() / 1000) };
+	const json = JSON.stringify(payloadObj);
+	const payload = btoa(String.fromCharCode(...new Uint8Array(new TextEncoder().encode(json))));
+	const sig = await signHmac(payload, secret as string);
 
 	headers.set(name, payload);
 	headers.set(sigName, sig);

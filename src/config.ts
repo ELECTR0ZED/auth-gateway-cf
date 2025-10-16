@@ -20,6 +20,10 @@ export const CONFIG: ProjectConfig = {
 		cookieName: "__Host-sid",
 		doName: env.SESSION_DO,
 		jwtSecretEnv: "SESSION_JWT_SECRET",
+		idleTtlSec: 14 * 24 * 60 * 60,     // 14 days
+  		absoluteTtlSec: 30 * 24 * 60 * 60, // 30 days
+		issuer: "auth-gateway",
+  		audience: "internal-services",
 	},
 	propagation: {
 		headerName: "X-User",
