@@ -6,15 +6,15 @@ export const CONFIG: ProjectConfig = {
 	publicBaseUrl: "https://auth-microservice.electr0zed.workers.dev",
 	providers: [
 		{
-			id: "discord",
+			id: "google",
 			enabled: true,
-			label: "Discord",
-			clientId: "1425964712431980625",
-			clientSecretEnv: "DISCORD_CLIENT_SECRET",
+			label: "Google",
+			clientId: "783906859341-qsramgvo2iogotttgc3v2pk3hv6cehs9.apps.googleusercontent.com",
+			clientSecretEnv: "GOOGLE_CLIENT_SECRET",
 			scope: "identify email",
 		}
 	],
-	defaultProvider: "discord",
+	defaultProvider: "google",
 	session: {
 		kind: "durableObject",
 		cookieName: "__Host-sid",
