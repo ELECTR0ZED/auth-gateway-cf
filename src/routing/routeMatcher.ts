@@ -1,4 +1,4 @@
-import type { Match, RouteRule } from "../core/types";
+import type { RouteRule } from "../core/types";
 
 /**
  * Ordered, short-circuit route matcher.

@@ -1,6 +1,6 @@
 // sessions/durableObjectSession.ts
 import { SessionStrategy } from ".";
-import type { SessionStrategyCfg, ProjectConfig } from "../core/types";
+import type { SessionStrategyCfg } from "../core/types";
 import { signJwtHS256 } from "../utils/jwt";
 import { getCookie } from ".";
 import type { Session } from ".";
