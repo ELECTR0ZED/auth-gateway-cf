@@ -11,7 +11,6 @@ export const CONFIG: ProjectConfig = {
 			label: "Google",
 			clientId: "783906859341-qsramgvo2iogotttgc3v2pk3hv6cehs9.apps.googleusercontent.com",
 			clientSecretEnv: "GOOGLE_CLIENT_SECRET",
-			scope: "identify email",
 		}
 	],
 	defaultProvider: "google",
