@@ -3,7 +3,7 @@ import type { ProjectConfig } from './types';
 
 export const CONFIG: ProjectConfig = {
 	projectName: 'demo-project',
-	publicBaseUrl: 'https://auth-microservice.electr0zed.workers.dev',
+	publicBaseUrl: 'http://127.0.0.1:8787',
 	providers: [
 		{
 			id: 'google',
