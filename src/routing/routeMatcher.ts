@@ -1,4 +1,4 @@
-import type { RouteRule } from "../core/types";
+import type { RouteRule } from '../types';
 
 /**
  * Ordered, short-circuit route matcher.
@@ -11,9 +11,9 @@ export class RouteMatcher {
 	private compiled: Array<{ rule: RouteRule; tests: Array<{ re: RegExp; methods?: string[] }> }>;
 
 	constructor(rules: RouteRule[]) {
-		this.compiled = rules.map(rule => {
+		this.compiled = rules.map((rule) => {
 			const arr = Array.isArray(rule.match) ? rule.match : [rule.match];
-			const tests = arr.map(m => ({
+			const tests = arr.map((m) => ({
 				re: toRegex(m.path),
 				methods: m.methods?.map(up),
 			}));
@@ -41,7 +41,7 @@ export class RouteMatcher {
 
 /** Normalizes path: removes trailing slash except for "/" */
 function normalizePath(p: string): string {
-	return p.length > 1 && p.endsWith("/") ? p.slice(0, -1) : p;
+	return p.length > 1 && p.endsWith('/') ? p.slice(0, -1) : p;
 }
 
 function up(s: string) {
@@ -59,14 +59,14 @@ function toRegex(path: string | RegExp): RegExp {
 
 	// normalize pattern's trailing slash too (except root)
 	let pat = path;
-	if (pat.length > 1 && pat.endsWith("/")) pat = pat.slice(0, -1);
+	if (pat.length > 1 && pat.endsWith('/')) pat = pat.slice(0, -1);
 
 	pat = pat
-		.replace(/[.+^${}()|[\]\\]/g, "\\$&")
-		.replace(/\*\\\*/g, "**")            // if someone escaped earlier, undo
-		.replace(/\*\*/g, ".*")
-		.replace(/\*/g, "[^/]*");
+		.replace(/[.+^${}()|[\]\\]/g, '\\$&')
+		.replace(/\*\\\*/g, '**') // if someone escaped earlier, undo
+		.replace(/\*\*/g, '.*')
+		.replace(/\*/g, '[^/]*');
 
-	const optSlash = pat === "/" ? "" : "(?:/)?";
+	const optSlash = pat === '/' ? '' : '(?:/)?';
 	return new RegExp(`^${pat}${optSlash}$`);
 }

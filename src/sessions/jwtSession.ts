@@ -1,25 +1,22 @@
-import { SessionStrategy } from ".";
-import type { SessionStrategyCfg, ProjectConfig } from "../core/types";
-import { signJwtHS256, verifyJwtHS256 } from "../utils/jwt";
-import { getCookie } from ".";
-import type { Session } from ".";
+import { SessionStrategy, Session, SessionStrategyCfg } from '../types';
+import { signJwtHS256, verifyJwtHS256 } from '../utils/jwt';
+import { getCookie } from '.';
 
 // Stateless cookie that IS the JWT
 export class JwtSessionStrategy implements SessionStrategy {
-	constructor(private cfg: SessionStrategyCfg & { kind: "jwt" }) {}
+	constructor(private cfg: SessionStrategyCfg & { kind: 'jwt' }) {}
 
 	async resolve(request: Request, env: Env) {
-		const token = getCookie(request, this.cfg.cookieName ?? "__Host-session");
+		const token = getCookie(request, this.cfg.cookieName ?? '__Host-session');
 		if (!token) return { session: null };
 
 		try {
-			const payload = await verifyJwtHS256(token, env[this.cfg.jwtSecretEnv]);
+			const payload = await verifyJwtHS256(token, env[this.cfg.jwtSecretEnv]!);
 			return {
 				session: {
-					sub: payload.sub,
+					userId: payload.sub,
 					email: payload.email,
-					claims: payload,
-				},
+				} as Session,
 			};
 		} catch {
 			return { session: null };
@@ -31,21 +28,23 @@ export class JwtSessionStrategy implements SessionStrategy {
 		const now = Math.floor(Date.now() / 1000);
 		const jwt = await signJwtHS256(
 			{
-				sub: session.sub,
+				sub: session.userId,
 				email: session.email,
 				iat: now,
+				nbf: now - 30,
 				exp: now + expMinutes * 60,
+				jti: crypto.randomUUID(),
 			},
-			env[this.cfg.jwtSecretEnv]
+			env[this.cfg.jwtSecretEnv]!,
 		);
 		return {
-			cookie: `${this.cfg.cookieName ?? "__Host-session"}=${jwt}; Path=/; HttpOnly; Secure; SameSite=Lax`,
+			cookie: `${this.cfg.cookieName ?? '__Host-session'}=${jwt}; Path=/; HttpOnly; Secure; SameSite=Lax`,
 		};
 	}
 
 	clear() {
 		return {
-			cookie: `${this.cfg.cookieName ?? "__Host-session"}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
+			cookie: `${this.cfg.cookieName ?? '__Host-session'}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
 		};
 	}
 }
