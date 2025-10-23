@@ -108,7 +108,10 @@ export class AuthRouter {
 				const code = (e as Error)?.message === 'identity_taken' ? 'identity_taken' : 'link_failed';
 				return this.redirectError(code, info.returnTo);
 			}
-			return Response.redirect(info.returnTo || '/', 302);
+			return new Response(null, {
+				status: 302,
+				headers: { Location: info.returnTo || '/' },
+			});
 		}
 
 		// login / signup

@@ -3,6 +3,9 @@
 	"name": "auth-microservice",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-10-08",
+	"compatibility_flags": [
+		"nodejs_compat"
+	],
 	"observability": {
 		"enabled": true
 	},
@@ -11,10 +14,6 @@
 		{
 			"binding": "AUTH_KV",
 			"id": "21349e8091a24f438e3b35bebc49ec72"
-		},
-		{
-			"binding": "USER_STORE_KV",
-			"id": "d72bb497c34f407283ea186d73ba0159"
 		}
 	],
 	"services": [
@@ -31,6 +30,12 @@
 			}
 		]
 	},
+	"hyperdrive": [
+		{
+			"binding": "USERSTORE",
+			"id": "4224a01f95484338a666ddde592f7770",
+		}
+	],
 	"migrations": [
 		{
 			"tag": "v1",
