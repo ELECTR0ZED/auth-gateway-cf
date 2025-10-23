@@ -1,3 +1,7 @@
+/* =========================================
+ * Routing / Gateway
+ * =======================================*/
+
 export type Match = { path: string | RegExp; methods?: string[] };
 
 export type RouteRule = {
@@ -6,6 +10,10 @@ export type RouteRule = {
 	auth: 'required' | 'none';
 	service: Fetcher;
 };
+
+/* =========================================
+ * Provider IDs & Config
+ * =======================================*/
 
 export type LoginProviderId = 'google';
 
@@ -24,6 +32,41 @@ export type ProviderConfig = {
 	b2cPolicy?: string;
 };
 
+/* =========================================
+ * Claims / Provider Runtime Contracts
+ * =======================================*/
+
+/** What each provider must extract from its claims. */
+export type NormalizedClaims = {
+	email: string; // required (your policy)
+	subject: string; // provider's stable subject (claims.sub usually)
+};
+
+export type ClaimsMode = 'id_token' | 'userinfo';
+
+/** Static wiring for a provider (URLs & defaults). */
+export type ProviderStatic = {
+	id: LoginProviderId;
+	authorizeEndpoint: string;
+	tokenEndpoint: string;
+	defaultIssuer: string;
+	defaultScope?: string; // e.g. "openid email profile"
+	userInfoEndpoint?: string; // if you want a userinfo fallback
+	claimsMode: ClaimsMode; // default claims extraction mode
+};
+
+/** Provider-normalized identity output (minimal) */
+export type ProviderIdentity = {
+	email: string;
+	provider: LoginProviderId;
+	issuer: string;
+	subject: string;
+};
+
+/* =========================================
+ * Session Strategy / Session Shapes
+ * =======================================*/
+
 export type SessionStrategyCfg =
 	| {
 			kind: 'jwt';
@@ -41,6 +84,29 @@ export type SessionStrategyCfg =
 			issuer?: string;
 			audience?: string;
 	  };
+
+/** Minimal persistent session payload */
+export interface StoredSession {
+	userId: string;
+	email: string;
+	createdAt: number;
+	updatedAt: number;
+}
+
+export type Session = {
+	userId: string;
+	email: string;
+};
+
+export interface SessionStrategy {
+	resolve(request: Request, env: Env): Promise<{ session: Session | null; accessJwt?: string }>;
+	issue?(session: Session, env: Env): Promise<{ cookie?: string; accessJwt?: string }>;
+	clear?(): { cookie: string };
+}
+
+/* =========================================
+ * Propagation / Project Config
+ * =======================================*/
 
 export type PropagationCfg = {
 	headerName?: string;
@@ -61,32 +127,13 @@ export type ProjectConfig = {
 	userStore: UserStoreCfg;
 };
 
-/** Minimal persistent session payload */
-export interface StoredSession {
-	userId: string;
-	email: string;
-	createdAt: number;
-	updatedAt: number;
-}
+/* =========================================
+ * User Store Contracts
+ * =======================================*/
 
-/** Provider-normalized identity output (minimal) */
-export type ProviderIdentity = {
-	email: string;
-	provider: LoginProviderId;
-	issuer: string;
-	subject: string;
-};
-
-/** User store contracts */
 export interface UserCore {
 	id: string;
 	email: string;
-}
-
-declare global {
-	interface Env {
-		[key: string]: string | undefined;
-	}
 }
 
 export interface UserStore {
@@ -95,6 +142,10 @@ export interface UserStore {
 	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
 }
+
+/* =========================================
+ * Auth Short-State (PKCE) Types
+ * =======================================*/
 
 export type StateMode = 'login' | 'link';
 
@@ -109,16 +160,9 @@ export type StoredPkce = {
 	i: StateInfo; // info
 };
 
-export type Session = {
-	userId: string;
-	email: string;
-};
-
-export interface SessionStrategy {
-	resolve(request: Request, env: Env): Promise<{ session: Session | null; accessJwt?: string }>;
-	issue?(session: Session, env: Env): Promise<{ cookie?: string; accessJwt?: string }>;
-	clear?(): { cookie: string };
-}
+/* =========================================
+ * OAuth Token Response Shape
+ * =======================================*/
 
 export type TokenResponse = {
 	access_token?: string;
@@ -129,21 +173,12 @@ export type TokenResponse = {
 	[key: string]: unknown;
 };
 
-/** What each provider must extract from its claims. */
-export type NormalizedClaims = {
-	email: string; // required (your policy)
-	subject: string; // provider's stable subject (claims.sub usually)
-};
+/* =========================================
+ * Global Env Declaration
+ * =======================================*/
 
-/** Static wiring for a provider (URLs & defaults). */
-export type ProviderStatic = {
-	id: LoginProviderId;
-	authorizeEndpoint: string;
-	tokenEndpoint: string;
-	defaultIssuer: string;
-	defaultScope?: string; // e.g. "openid email profile"
-	userInfoEndpoint?: string; // if you want a userinfo fallback
-	claimsMode: ClaimsMode; // default claims extraction mode
-};
-
-export type ClaimsMode = 'id_token' | 'userinfo';
+declare global {
+	interface Env {
+		[key: string]: string | undefined;
+	}
+}
