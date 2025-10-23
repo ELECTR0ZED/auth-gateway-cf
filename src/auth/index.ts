@@ -58,13 +58,13 @@ export class AuthRouter {
 		}
 
 		const { state, codeChallenge, verifier } = await makePkceState();
-		await saveShortState(this.env.AUTH_KV as unknown as KVNamespace, state, verifier, 300, {
+		await saveShortState(this.env.AUTH_KV, state, verifier, 300, {
 			mode,
 			returnTo,
 			provider: cfg.id,
 		});
 
-		const loginUrl = impl.loginURL(cfg, this.cfg.publicBaseUrl, state, codeChallenge, returnTo);
+		const loginUrl = impl.loginURL(cfg, this.cfg.publicBaseUrl, state, codeChallenge);
 		return Response.redirect(loginUrl, 302);
 	}
 
@@ -81,7 +81,8 @@ export class AuthRouter {
 		const providerParam = url.searchParams.get('provider') ?? undefined;
 		const { impl, cfg } = this.pickProvider(providerParam);
 		const code = url.searchParams.get('code')!;
-		const { verifier, info } = await consumeShortState(this.env.AUTH_KV as unknown as KVNamespace, url.searchParams.get('state')!);
+		const state = url.searchParams.get('state')!;
+		const { verifier, info } = await consumeShortState(this.env.AUTH_KV, state);
 
 		const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
 		const identity = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);

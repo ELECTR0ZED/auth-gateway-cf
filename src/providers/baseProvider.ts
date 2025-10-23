@@ -21,7 +21,7 @@ export abstract class AuthProvider {
 		return key ? env[key] : undefined;
 	}
 
-	loginURL(cfg: ProviderConfig, baseUrl: string, state: string, codeChallenge: string, returnTo?: string): string {
+	loginURL(cfg: ProviderConfig, baseUrl: string, state: string, codeChallenge: string): string {
 		const authorize = this.getAuthorizeEndpoint(cfg);
 		const scope = this.getDefaultScope(cfg);
 		const redirectUri = this.getRedirectUri(baseUrl);
@@ -35,8 +35,6 @@ export abstract class AuthProvider {
 			code_challenge_method: 'S256',
 			state,
 		});
-
-		if (returnTo) qp.set('returnTo', returnTo);
 
 		return `${authorize}?${qp.toString()}`;
 	}
