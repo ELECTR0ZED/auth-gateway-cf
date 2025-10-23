@@ -48,7 +48,7 @@ export type PropagationCfg = {
 	hmacSecretEnv: string;
 };
 
-export type UserStoreCfg = { kind: 'kv'; kv: KVNamespace } | { kind: 'postgres'; connectionString: string };
+export type UserStoreCfg = { kind: 'kv'; kv: KVNamespace } | { kind: 'postgres'; hyperdrive: Hyperdrive };
 
 export type ProjectConfig = {
 	projectName: string;

@@ -1,4 +1,5 @@
 import type { ProviderConfig, LoginProviderId, ProviderIdentity, TokenResponse } from '../types';
+import { normEmail } from '../utils/helpers';
 
 export abstract class AuthProvider {
 	abstract id: LoginProviderId;
@@ -87,7 +88,7 @@ export abstract class AuthProvider {
 		}
 
 		return {
-			email: email.trim().toLowerCase(),
+			email: normEmail(email),
 			provider: this.id,
 			issuer,
 			subject,
@@ -96,7 +97,9 @@ export abstract class AuthProvider {
 
 	protected async fetchUserInfo(cfg: ProviderConfig, accessToken: string): Promise<{ claims: any }> {
 		if (!cfg.userInfoUrl) return { claims: {} };
-		const r = await fetch(cfg.userInfoUrl, { headers: { authorization: `Bearer ${accessToken}` } });
+		const r = await fetch(cfg.userInfoUrl, {
+			headers: { authorization: `Bearer ${accessToken}` },
+		});
 		if (!r.ok) throw new Error(`userinfo failed: ${r.status}`);
 		const claims = (await r.json()) as any;
 		return { claims };

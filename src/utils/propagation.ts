@@ -17,7 +17,11 @@ export async function attachSignedUser(headers: Headers, session: Session, cfg: 
 	const secret = env[cfg.propagation.hmacSecretEnv];
 	if (!secret) throw new Error('Missing HMAC secret');
 
-	const payloadObj = { userId: session.userId, email: session.email, ts: Math.floor(Date.now() / 1000) };
+	const payloadObj = {
+		userId: session.userId,
+		email: session.email,
+		ts: Math.floor(Date.now() / 1000),
+	};
 	const json = JSON.stringify(payloadObj);
 	const payload = btoa(String.fromCharCode(...new Uint8Array(new TextEncoder().encode(json))));
 	const sig = await signHmac(payload, secret as string);

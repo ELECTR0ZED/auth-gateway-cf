@@ -10,6 +10,13 @@ export class AuthRouter {
 		private strat: SessionStrategy,
 	) {}
 
+	/**
+	 * Handles incoming authentication requests.
+	 *
+	 * @async
+	 * @param {Request} request
+	 * @returns {Promise<Response>}
+	 */
 	async handle(request: Request): Promise<Response> {
 		const url = new URL(request.url);
 		if (!/^\/auth(\/|$)/.test(url.pathname)) {
@@ -29,6 +36,15 @@ export class AuthRouter {
 		}
 	}
 
+	/**
+	 * Handles login or linking of new oauth providers.
+	 *
+	 * @private
+	 * @async
+	 * @param {Request} request
+	 * @param {URL} url
+	 * @returns {Promise<Response>}
+	 */
 	private async loginOrLink(request: Request, url: URL): Promise<Response> {
 		const mode = url.pathname.endsWith('/link') ? 'link' : 'login';
 		const { impl, cfg } = this.pickProvider(url.searchParams.get('provider') ?? undefined);
@@ -52,6 +68,15 @@ export class AuthRouter {
 		return Response.redirect(loginUrl, 302);
 	}
 
+	/**
+	 * Handles the OAuth callback.
+	 *
+	 * @private
+	 * @async
+	 * @param {Request} request
+	 * @param {URL} url
+	 * @returns {Promise<Response>}
+	 */
 	private async callback(request: Request, url: URL): Promise<Response> {
 		const providerParam = url.searchParams.get('provider') ?? undefined;
 		const { impl, cfg } = this.pickProvider(providerParam);
@@ -88,7 +113,10 @@ export class AuthRouter {
 		// login / signup
 		const byIdentity = await this.store.findUserIdByIdentity(identity.issuer, identity.subject);
 		if (byIdentity) {
-			const response = new Response(null, { status: 302, headers: { Location: info.returnTo || '/' } });
+			const response = new Response(null, {
+				status: 302,
+				headers: { Location: info.returnTo || '/' },
+			});
 			const issued = await this.strat.issue?.({ userId: byIdentity, email: identity.email }, this.env);
 			if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
 			if (issued?.accessJwt)
@@ -99,15 +127,15 @@ export class AuthRouter {
 			return response;
 		}
 
-		const emailLower = identity.email; // email normalization should be handled by store decorator/base
-		const byEmail = await this.store.findUserIdByEmail(emailLower);
+		const email = identity.email;
+		const byEmail = await this.store.findUserIdByEmail(email);
 		if (byEmail) {
 			return this.redirectError('account_exists', info.returnTo);
 		}
 
 		let userId: string;
 		try {
-			userId = await this.store.createUserWithIdentity(emailLower, {
+			userId = await this.store.createUserWithIdentity(email, {
 				provider: identity.provider,
 				issuer: identity.issuer,
 				subject: identity.subject,
@@ -117,14 +145,23 @@ export class AuthRouter {
 			return this.redirectError(code, info.returnTo);
 		}
 
-		const response = new Response(null, { status: 302, headers: { Location: info.returnTo || '/' } });
-		const issued = await this.strat.issue?.({ userId, email: emailLower }, this.env);
+		const response = new Response(null, {
+			status: 302,
+			headers: { Location: info.returnTo || '/' },
+		});
+		const issued = await this.strat.issue?.({ userId, email }, this.env);
 		if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
 		if (issued?.accessJwt)
 			response.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);
 		return response;
 	}
 
+	/**
+	 * Handles user logout.
+	 *
+	 * @private
+	 * @returns {Response}
+	 */
 	private logout(): Response {
 		const r = new Response(null, {
 			status: 302,
@@ -135,6 +172,13 @@ export class AuthRouter {
 		return r;
 	}
 
+	/**
+	 * Selects the OAuth provider implementation and configuration.
+	 *
+	 * @private
+	 * @param {?string} [explicit]
+	 * @returns {{ impl: any; cfg: any; }}
+	 */
 	private pickProvider(explicit?: string) {
 		const id = explicit || this.cfg.defaultProvider || this.cfg.providers.find((p) => p.enabled)?.id;
 
@@ -147,11 +191,22 @@ export class AuthRouter {
 		return { impl, cfg };
 	}
 
+	/**
+	 * Handles error redirection during auth flow.
+	 *
+	 * @private
+	 * @param {string} code
+	 * @param {?string} [returnTo]
+	 * @returns {*}
+	 */
 	private redirectError(code: string, returnTo?: string) {
 		if (returnTo) {
 			const sep = returnTo.includes('?') ? '&' : '?';
 			return Response.redirect(`${returnTo}${sep}auth_error=${code}`, 302);
 		}
-		return new Response(null, { status: 302, headers: { Location: `/${'?auth_error=' + code}` } });
+		return new Response(null, {
+			status: 302,
+			headers: { Location: `/${'?auth_error=' + code}` },
+		});
 	}
 }
