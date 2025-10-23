@@ -128,3 +128,22 @@ export type TokenResponse = {
 	expires_in?: number;
 	[key: string]: unknown;
 };
+
+/** What each provider must extract from its claims. */
+export type NormalizedClaims = {
+	email: string; // required (your policy)
+	subject: string; // provider's stable subject (claims.sub usually)
+};
+
+/** Static wiring for a provider (URLs & defaults). */
+export type ProviderStatic = {
+	id: LoginProviderId;
+	authorizeEndpoint: string;
+	tokenEndpoint: string;
+	defaultIssuer: string;
+	defaultScope?: string; // e.g. "openid email profile"
+	userInfoEndpoint?: string; // if you want a userinfo fallback
+	claimsMode: ClaimsMode; // default claims extraction mode
+};
+
+export type ClaimsMode = 'id_token' | 'userinfo';

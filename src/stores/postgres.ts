@@ -3,12 +3,12 @@ import { Pool } from 'pg';
 import { Kysely, PostgresDialect, type Generated } from 'kysely';
 
 // --- DB shape for Kysely type-safety ---
+// Mark DB-populated columns as Generated<...> so inserts don't require them.
 interface DB {
 	users: {
-		id: string; // uuid (pk)
-		email: string;
-		created_at: Date;
-		updated_at: Date;
+		id: Generated<string>; // uuid DEFAULT uuid_generate_v4()
+		email: string; // unique
+		created_at: Generated<Date>; // DEFAULT now()
 	};
 	user_identities: {
 		id: Generated<number>; // bigserial
@@ -16,7 +16,7 @@ interface DB {
 		provider: string;
 		issuer: string;
 		subject: string;
-		created_at: Date;
+		created_at: Generated<Date>; // DEFAULT now()
 	};
 }
 
@@ -38,14 +38,13 @@ export class PostgresUserStore implements UserStore {
 		const row = await this.db
 			.selectFrom('user_identities as ui')
 			.innerJoin('users as u', 'u.id', 'ui.user_id')
-			.select('u.id')
+			.select(['u.id'])
 			.where('ui.issuer', '=', issuer)
 			.where('ui.subject', '=', subject)
-			.selectAll('u')
-			.select(['u.id'])
 			.executeTakeFirst();
 
 		return row?.id ?? null;
+		// (Optional) .execute() returns array; .executeTakeFirst() returns a single row or undefined.
 	}
 
 	async findUserIdByEmail(email: string): Promise<string | null> {
@@ -56,7 +55,7 @@ export class PostgresUserStore implements UserStore {
 
 	async createUserWithIdentity(email: string, identity: { provider: string; issuer: string; subject: string }): Promise<string> {
 		return this.db.transaction().execute(async (trx) => {
-			// 1) If identity already exists, return its user (idempotent for re-login).
+			// 1) Idempotency: if identity already exists, return its user.
 			const existing = await trx
 				.selectFrom('user_identities as ui')
 				.innerJoin('users as u', 'u.id', 'ui.user_id')
@@ -69,30 +68,26 @@ export class PostgresUserStore implements UserStore {
 				return existing.id;
 			}
 
-			// 2) Ensure user exists or detect unique email conflict.
-			// Prefer INSERT ... ON CONFLICT DO NOTHING RETURNING id
+			// 2) Create-or-detect user by email
 			const insertedUser = await trx
 				.insertInto('users')
-				.values({
-					email,
-				})
+				.values({ email })
 				.onConflict((oc) => oc.column('email').doNothing())
 				.returning(['id'])
 				.executeTakeFirst();
 
 			const userId = insertedUser?.id;
 			if (!userId) {
-				// No row inserted → email already exists. Fetch to confirm and error out.
+				// No row inserted → email already exists. Confirm and throw account_exists.
 				const existingUser = await trx.selectFrom('users').select(['id']).where('email', '=', email).executeTakeFirst();
 
 				if (existingUser?.id) {
 					throw new Error('account_exists');
 				}
-				// If we got here, something else prevented insert; surface a generic error.
 				throw new Error('signup_failed');
 			}
 
-			// 3) Bind identity. If (issuer, subject) already taken by another user, fail.
+			// 3) Bind identity. If (issuer, subject) owned by another user, fail.
 			const insertedIdentity = await trx
 				.insertInto('user_identities')
 				.values({
@@ -106,7 +101,7 @@ export class PostgresUserStore implements UserStore {
 				.executeTakeFirst();
 
 			if (!insertedIdentity) {
-				// Conflict on (issuer, subject). Check owner.
+				// Conflict → check owner
 				const owner = await trx
 					.selectFrom('user_identities')
 					.select(['user_id'])
@@ -115,10 +110,9 @@ export class PostgresUserStore implements UserStore {
 					.executeTakeFirst();
 
 				if (owner?.user_id && owner.user_id !== userId) {
-					// In "create" flow, an existing identity implies the account already exists.
 					throw new Error('account_exists');
 				}
-				// Else identity already linked to this user (idempotent), fall through.
+				// else already linked to this user → idempotent
 			}
 
 			return userId;
@@ -139,7 +133,7 @@ export class PostgresUserStore implements UserStore {
 			.executeTakeFirst();
 
 		if (!res) {
-			// Conflict on (issuer, subject). Check who owns it.
+			// Conflict → figure out owner
 			const owner = await this.db
 				.selectFrom('user_identities')
 				.select(['user_id'])
@@ -150,11 +144,10 @@ export class PostgresUserStore implements UserStore {
 			if (owner?.user_id && owner.user_id !== userId) {
 				throw new Error('identity_taken');
 			}
-			// Already linked to this user → no-op.
+			// already linked to same user → no-op
 		}
 	}
 
-	// Optional: call on worker shutdown if you manage lifecycle explicitly
 	async destroy(): Promise<void> {
 		await this.db.destroy();
 		await this.pool.end();

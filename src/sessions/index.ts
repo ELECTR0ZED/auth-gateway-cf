@@ -28,11 +28,5 @@ export function makeSessionStrategy(sessionCfg: SessionStrategyCfg): SessionStra
 	if (sessionCfg.kind === 'jwt') return new JwtSessionStrategy(sessionCfg);
 	if (sessionCfg.kind === 'durableObject') return new DurableObjectSessionStrategy(sessionCfg);
 
-	// Fallback to a reasonable default
-	return new JwtSessionStrategy({
-		kind: 'jwt',
-		cookieName: '__Host-session',
-		expMinutes: 15,
-		jwtSecretEnv: 'AUTH_JWT_SECRET',
-	});
+	throw new Error(`unknown session strategy kind: ${(sessionCfg as SessionStrategyCfg).kind}`);
 }

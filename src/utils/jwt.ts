@@ -48,11 +48,11 @@ function b64urlDecodeUtf8(u: string): string {
  *
  * @export
  * @async
- * @param {Record<string, any>} payload
+ * @param {Record<string, string | number>} payload
  * @param {string} secret
  * @returns {Promise<string>}
  */
-export async function signJwtHS256(payload: Record<string, any>, secret: string): Promise<string> {
+export async function signJwtHS256(payload: Record<string, string | number>, secret: string): Promise<string> {
 	const header = b64urlEncodeUtf8(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
 	const body = b64urlEncodeUtf8(JSON.stringify(payload));
 
@@ -71,9 +71,9 @@ export async function signJwtHS256(payload: Record<string, any>, secret: string)
  * @async
  * @param {string} token
  * @param {string} secret
- * @returns {Promise<Record<string, any>>}
+ * @returns {Promise<Record<string, string | number>>}
  */
-export async function verifyJwtHS256(token: string, secret: string): Promise<Record<string, any>> {
+export async function verifyJwtHS256(token: string, secret: string): Promise<Record<string, string | number>> {
 	const [h, p, s] = token.split('.');
 	if (!h || !p || !s) {
 		throw new Error('bad jwt');

@@ -1,30 +1,44 @@
-import type { ProviderConfig } from '../types';
+import type { ProviderConfig, NormalizedClaims } from '../types';
 import { AuthProvider } from './baseProvider';
 
+/** Narrow claim shapes we expect from Google for type-safe normalize(). */
+type GoogleJwtClaims = {
+	sub: string;
+	email?: string;
+	email_verified?: boolean;
+};
+
+type GoogleUserInfo = {
+	sub: string;
+	email?: string;
+};
+
 export class GoogleProvider extends AuthProvider {
-	id = 'google' as const;
-
-	protected getAuthorizeEndpoint(): string {
-		return 'https://accounts.google.com/o/oauth2/v2/auth';
-	}
-
-	protected getTokenEndpoint(): string {
-		return 'https://oauth2.googleapis.com/token';
-	}
-
-	protected getDefaultIssuer(): string {
-		return 'https://accounts.google.com';
-	}
-
-	protected getDefaultScope(cfg: ProviderConfig): string {
-		return cfg.scope ?? 'openid email profile';
-	}
-
-	protected async fetchUserInfo(_: ProviderConfig, accessToken: string): Promise<{ claims: any }> {
-		const r = await fetch('https://openidconnect.googleapis.com/v1/userinfo', {
-			headers: { authorization: `Bearer ${accessToken}` },
+	constructor() {
+		super({
+			id: 'google',
+			authorizeEndpoint: 'https://accounts.google.com/o/oauth2/v2/auth',
+			tokenEndpoint: 'https://oauth2.googleapis.com/token',
+			defaultIssuer: 'https://accounts.google.com',
+			defaultScope: 'openid email profile',
+			userInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
+			claimsMode: 'id_token',
 		});
-		if (!r.ok) throw new Error(`userinfo failed: ${r.status}`);
-		return { claims: await r.json() };
+	}
+
+	/** Providers must supply a normalize() — no `any` needed. */
+	protected normalize(claims: unknown): NormalizedClaims {
+		// We accept either ID token payload or userinfo payload
+		const c = claims as Partial<GoogleJwtClaims & GoogleUserInfo> | null | undefined;
+
+		const subject = typeof c?.sub === 'string' ? c.sub : '';
+		const email = typeof c?.email === 'string' ? c.email : '';
+
+		return { email, subject };
+	}
+
+	// (Optional) If you need provider-specific scope overrides per cfg:
+	protected override getDefaultScope(cfg: ProviderConfig): string {
+		return cfg.scope ?? 'openid email profile';
 	}
 }

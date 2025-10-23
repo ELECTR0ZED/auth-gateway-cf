@@ -1,15 +1,36 @@
-import type { ProviderConfig, LoginProviderId, ProviderIdentity, TokenResponse } from '../types';
-import { normEmail } from '../utils/helpers';
+import type {
+	ProviderConfig,
+	LoginProviderId,
+	ProviderIdentity,
+	TokenResponse,
+	ProviderStatic,
+	NormalizedClaims,
+	ClaimsMode,
+} from '../types';
 
 export abstract class AuthProvider {
-	abstract id: LoginProviderId;
+	readonly id: LoginProviderId;
+	private readonly authorizeEndpoint: string;
+	private readonly tokenEndpoint: string;
+	private readonly defaultIssuer: string;
+	private readonly defaultScope?: string;
+	private readonly userInfoEndpoint?: string;
+	private readonly claimsMode: ClaimsMode;
 
-	protected abstract getAuthorizeEndpoint(cfg: ProviderConfig): string;
-	protected abstract getTokenEndpoint(cfg: ProviderConfig): string;
-	protected abstract getDefaultIssuer(cfg: ProviderConfig): string;
+	constructor(staticCfg: ProviderStatic) {
+		this.id = staticCfg.id;
+		this.authorizeEndpoint = staticCfg.authorizeEndpoint;
+		this.tokenEndpoint = staticCfg.tokenEndpoint;
+		this.defaultIssuer = staticCfg.defaultIssuer;
+		this.defaultScope = staticCfg.defaultScope;
+		this.userInfoEndpoint = staticCfg.userInfoEndpoint;
+		this.claimsMode = staticCfg.claimsMode;
+	}
+
+	protected abstract normalize(claims: unknown): NormalizedClaims;
 
 	protected getDefaultScope(cfg: ProviderConfig): string {
-		return cfg.scope ?? 'openid email profile';
+		return cfg.scope ?? this.defaultScope ?? 'openid email profile';
 	}
 
 	protected getRedirectUri(baseUrl: string): string {
@@ -22,7 +43,6 @@ export abstract class AuthProvider {
 	}
 
 	loginURL(cfg: ProviderConfig, baseUrl: string, state: string, codeChallenge: string): string {
-		const authorize = this.getAuthorizeEndpoint(cfg);
 		const scope = this.getDefaultScope(cfg);
 		const redirectUri = this.getRedirectUri(baseUrl);
 
@@ -36,11 +56,10 @@ export abstract class AuthProvider {
 			state,
 		});
 
-		return `${authorize}?${qp.toString()}`;
+		return `${this.authorizeEndpoint}?${qp.toString()}`;
 	}
 
 	async exchangeCode(cfg: ProviderConfig, env: Env, code: string, codeVerifier: string, redirectUri: string): Promise<ProviderIdentity> {
-		const tokenUrl = this.getTokenEndpoint(cfg);
 		const scope = this.getDefaultScope(cfg);
 		const clientSecret = this.getClientSecret(env, cfg);
 
@@ -54,7 +73,7 @@ export abstract class AuthProvider {
 		});
 		if (clientSecret) body.set('client_secret', clientSecret);
 
-		const res = await fetch(tokenUrl, {
+		const res = await fetch(this.tokenEndpoint, {
 			method: 'POST',
 			headers: { 'content-type': 'application/x-www-form-urlencoded' },
 			body,
@@ -63,48 +82,47 @@ export abstract class AuthProvider {
 			const text = await res.text().catch(() => '');
 			throw new Error(`token exchange failed: ${res.status} ${text}`);
 		}
-
 		const json = (await res.json()) as TokenResponse;
 
-		let claims: any = {};
-		if (typeof json.id_token === 'string') {
+		let claims: unknown = {};
+		if (this.claimsMode === 'id_token') {
+			if (typeof json.id_token !== 'string') {
+				throw new Error('id_token_missing');
+			}
 			claims = this.parseJwt(json.id_token);
-		} else if (typeof json.access_token === 'string') {
-			const info = await this.fetchUserInfo(cfg, json.access_token);
+		} else if (this.claimsMode === 'userinfo') {
+			if (!this.userInfoEndpoint || typeof json.access_token !== 'string') {
+				throw new Error('userinfo_unavailable');
+			}
+			const info = await this.fetchUserInfo(this.userInfoEndpoint, json.access_token);
 			claims = info.claims;
+		} else {
+			throw new Error('claims_unavailable');
 		}
 
-		const email = (claims?.email || '').toString();
-		if (!email) {
-			throw new Error('email_required');
-		}
+		const norm = this.normalize(claims);
+		if (!norm.email) throw new Error('email_required');
+		if (!norm.subject) throw new Error('missing_subject');
 
-		const issuer = (cfg.issuer ?? this.getDefaultIssuer(cfg)) || '';
-		const subject = (claims?.sub || '').toString();
-		if (!subject) {
-			throw new Error('missing_subject');
-		}
-
+		const issuer = (cfg.issuer ?? this.defaultIssuer) || '';
 		return {
-			email: normEmail(email),
+			email: norm.email,
 			provider: this.id,
 			issuer,
-			subject,
+			subject: norm.subject,
 		};
 	}
 
-	protected async fetchUserInfo(cfg: ProviderConfig, accessToken: string): Promise<{ claims: any }> {
-		if (!cfg.userInfoUrl) return { claims: {} };
-		const r = await fetch(cfg.userInfoUrl, {
-			headers: { authorization: `Bearer ${accessToken}` },
-		});
+	protected async fetchUserInfo(userInfoEndpoint: string, accessToken: string): Promise<{ claims: unknown }> {
+		const r = await fetch(userInfoEndpoint, { headers: { authorization: `Bearer ${accessToken}` } });
 		if (!r.ok) throw new Error(`userinfo failed: ${r.status}`);
-		const claims = (await r.json()) as any;
+		const claims = (await r.json()) as unknown;
 		return { claims };
 	}
 
-	protected parseJwt(token: string): any {
+	protected parseJwt(token: string): unknown {
 		const [, p] = token.split('.');
+		if (!p) return {};
 		return JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')));
 	}
 }

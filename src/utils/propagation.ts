@@ -24,7 +24,7 @@ export async function attachSignedUser(headers: Headers, session: Session, cfg: 
 	};
 	const json = JSON.stringify(payloadObj);
 	const payload = btoa(String.fromCharCode(...new Uint8Array(new TextEncoder().encode(json))));
-	const sig = await signHmac(payload, secret as string);
+	const sig = await signHmac(payload, secret);
 
 	headers.set(name, payload);
 	headers.set(sigName, sig);
