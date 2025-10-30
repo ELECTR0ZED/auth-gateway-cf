@@ -1,5 +1,4 @@
 import type { ProjectConfig, SessionStrategy } from '../types';
-import { CONFIG } from '../config';
 import { RouteMatcher } from '../routing/routeMatcher';
 import { makeSessionStrategy } from '../sessions';
 import { attachSignedUser, stripUser } from '../utils/propagation';
@@ -12,7 +11,7 @@ export class Gateway {
 
 	constructor(
 		private env: Env,
-		private cfg: ProjectConfig = CONFIG,
+		private cfg: ProjectConfig,
 	) {
 		const store = makeUserStore(cfg.userStore);
 		this.strat = makeSessionStrategy(cfg.session);
