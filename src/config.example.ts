@@ -1,4 +1,3 @@
-import { env } from 'cloudflare:workers';
 import { defineConfig } from '.';
 
 defineConfig({
@@ -17,7 +16,7 @@ defineConfig({
 	session: {
 		kind: 'durableObject',
 		cookieName: '__Host-sid',
-		doName: env.SESSION_DO,
+		doName: {} as DurableObjectNamespace,
 		jwtSecretEnv: 'SESSION_JWT_SECRET',
 		idleTtlSec: 14 * 24 * 60 * 60, // 14 days
 		absoluteTtlSec: 30 * 24 * 60 * 60, // 30 days
@@ -26,7 +25,8 @@ defineConfig({
 	},
 	userStore: {
 		kind: 'postgres',
-		hyperdrive: env.USERSTORE,
+		hyperdrive: {} as Hyperdrive,
+		shortStateKV: {} as KVNamespace,
 	},
 	propagation: {
 		headerName: 'X-User',
@@ -39,14 +39,14 @@ defineConfig({
 				path: /^\/admin(?:\/|$)/,
 			},
 			auth: 'required',
-			service: env.HWWORKER,
+			service: {} as Service,
 		},
 		{
 			match: {
 				path: /^.*/,
 			},
 			auth: 'none',
-			service: env.HWWORKER,
+			service: {} as Service,
 		},
 	],
 });
