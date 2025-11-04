@@ -17,6 +17,14 @@ jobs:
           node-version: 20
       - run: npm ci
       - run: npm run build
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-files
+          path: |
+            dist/
+            package.json
+          retention-days: 1
 
   publish-gpr:
     needs: build
@@ -26,12 +34,14 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      - name: Download build artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: build-files
       - uses: actions/setup-node@v4
         with:
           node-version: 20
           registry-url: https://npm.pkg.github.com/
-      - run: npm ci
-      - run: npm run build
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{secrets.GITHUB_TOKEN}}
