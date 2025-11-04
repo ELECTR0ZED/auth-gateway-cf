@@ -114,21 +114,11 @@ export type PropagationCfg = {
 	hmacSecretEnv: string;
 };
 
-type BaseUserStoreCfg = {
+type StoreBackend = { kind: 'kv'; kv: KVNamespace } | { kind: 'postgres'; hyperdrive: Hyperdrive };
+
+export type UserStoreCfg = StoreBackend & {
 	shortStateKV: KVNamespace;
 };
-
-type KvUserStoreCfg = BaseUserStoreCfg & {
-	kind: 'kv';
-	kv: KVNamespace;
-};
-
-type PostgresUserStoreCfg = BaseUserStoreCfg & {
-	kind: 'postgres';
-	hyperdrive: Hyperdrive;
-};
-
-export type UserStoreCfg = KvUserStoreCfg | PostgresUserStoreCfg;
 
 export type ProjectConfig = {
 	projectName: string;
