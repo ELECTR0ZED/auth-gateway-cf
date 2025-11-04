@@ -1,11 +1,17 @@
 import { Gateway } from './core/gateway';
-import { CONFIG } from './config';
+import type { ProjectConfig } from './types';
 
 export { SessionDO } from './do/sessionDo';
 
-export default {
-	async fetch(request, env): Promise<Response> {
-		const app = new Gateway(env, CONFIG);
-		return app.fetch(request);
-	},
-} satisfies ExportedHandler<Env>;
+export default function createGateway(cfg: ProjectConfig): ExportedHandler<Env> {
+	return {
+		async fetch(request, env, _ctx) {
+			const app = new Gateway(env, cfg);
+			return app.fetch(request);
+		},
+	};
+}
+
+export function defineConfig(config: ProjectConfig): ProjectConfig {
+	return config;
+}

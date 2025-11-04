@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import type { ProjectConfig } from './types';
+import { defineConfig } from '.';
 
-export const CONFIG: ProjectConfig = {
+defineConfig({
 	projectName: 'demo-project',
 	publicBaseUrl: 'http://domain.com',
 	providers: [
@@ -49,4 +49,4 @@ export const CONFIG: ProjectConfig = {
 			service: env.HWWORKER,
 		},
 	],
-};
+});
