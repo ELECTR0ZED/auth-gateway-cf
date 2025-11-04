@@ -16,7 +16,7 @@ defineConfig({
 	session: {
 		kind: 'durableObject',
 		cookieName: '__Host-sid',
-		doName: {} as DurableObjectNamespace,
+		doName: {} as DurableObjectNamespace<import('./index').SessionDO>,
 		jwtSecretEnv: 'SESSION_JWT_SECRET',
 		idleTtlSec: 14 * 24 * 60 * 60, // 14 days
 		absoluteTtlSec: 30 * 24 * 60 * 60, // 30 days

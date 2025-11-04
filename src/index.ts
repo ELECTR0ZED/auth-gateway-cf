@@ -15,3 +15,5 @@ export default function createGateway(cfg: ProjectConfig): ExportedHandler<Env> 
 export function defineConfig(config: ProjectConfig): ProjectConfig {
 	return config;
 }
+
+export type * from './types';
