@@ -125,7 +125,8 @@ export class AuthRouter {
 				status: 302,
 				headers: { Location: info.returnTo || '/' },
 			});
-			const issued = await this.strat.issue?.({ userId: byIdentity, email: email }, this.env);
+			const systemRoles = await this.store.getUserRoles(byIdentity);
+			const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
 			if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
 			if (issued?.accessJwt)
 				response.headers.append(
@@ -156,7 +157,8 @@ export class AuthRouter {
 			status: 302,
 			headers: { Location: info.returnTo || '/' },
 		});
-		const issued = await this.strat.issue?.({ userId, email }, this.env);
+		const systemRoles = await this.store.getUserRoles(userId);
+		const issued = await this.strat.issue?.({ userId, email, systemRoles }, this.env);
 		if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
 		if (issued?.accessJwt)
 			response.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);

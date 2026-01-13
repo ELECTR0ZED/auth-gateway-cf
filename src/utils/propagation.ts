@@ -4,6 +4,7 @@ import type { ProjectConfig, Session } from '../types';
 export type PropagatedUserPayload = {
 	userId: string;
 	email: string;
+	systemRoles: string[];
 	ts: number;
 };
 
@@ -19,6 +20,7 @@ export async function attachSignedUser(headers: Headers, session: Session, cfg: 
 	const payloadObj: PropagatedUserPayload = {
 		userId: session.userId,
 		email: session.email,
+		systemRoles: session.systemRoles,
 		ts: Math.floor(Date.now() / 1000),
 	};
 
