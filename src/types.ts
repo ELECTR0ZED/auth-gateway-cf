@@ -8,6 +8,8 @@ export type RouteRule = {
 	name?: string;
 	match: Match | Match[];
 	auth: 'required' | 'none';
+	requireRolesAny?: string[];
+	requireRolesAll?: string[];
 	service: Fetcher;
 };
 
@@ -64,6 +66,12 @@ export type ProviderIdentity = {
 };
 
 /* =========================================
+ * System Roles
+ * =======================================*/
+
+export type SystemRole = string;
+
+/* =========================================
  * Session Strategy / Session Shapes
  * =======================================*/
 
@@ -89,6 +97,7 @@ export type SessionStrategyCfg =
 export interface StoredSession {
 	userId: string;
 	email: string;
+	systemRoles: SystemRole[];
 	createdAt: number;
 	updatedAt: number;
 }
@@ -96,6 +105,7 @@ export interface StoredSession {
 export type Session = {
 	userId: string;
 	email: string;
+	systemRoles: SystemRole[];
 };
 
 export interface SessionStrategy {
@@ -138,6 +148,7 @@ export type ProjectConfig = {
 export interface UserCore {
 	id: string;
 	email: string;
+	systemRoles: SystemRole[];
 }
 
 export interface UserStore {
@@ -145,6 +156,7 @@ export interface UserStore {
 	findUserIdByEmail(emailLower: string): Promise<string | null>;
 	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
+	getUserRoles(userId: string): Promise<SystemRole[]>;
 }
 
 /* =========================================

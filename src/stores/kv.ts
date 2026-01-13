@@ -43,7 +43,7 @@ export class KvUserStore implements UserStore {
 
 		const userId = crypto.randomUUID();
 
-		const user: UserCore = { id: userId, email };
+		const user: UserCore = { id: userId, email, systemRoles: [] };
 		await this.kv.put(this.kEmail(email), userId);
 		await this.kv.put(this.kUser(userId), JSON.stringify(user));
 		await this.kv.put(this.kIdentity(identity.issuer, identity.subject), userId);
@@ -72,5 +72,12 @@ export class KvUserStore implements UserStore {
 			list.push(identity);
 			await this.kv.put(this.kUserIdentities(userId), JSON.stringify(list));
 		}
+	}
+
+	async getUserRoles(userId: string): Promise<string[]> {
+		const userRaw = await this.kv.get(this.kUser(userId));
+		if (!userRaw) return [];
+		const user = JSON.parse(userRaw) as UserCore & { systemRoles?: string[] };
+		return user.systemRoles || [];
 	}
 }

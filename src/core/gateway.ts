@@ -4,6 +4,7 @@ import { makeSessionStrategy } from '../sessions';
 import { attachSignedUser, stripUser } from '../utils/propagation';
 import { AuthRouter } from '../auth';
 import { makeUserStore } from '../stores';
+import { hasAllRoles, hasAnyRole } from '../utils/roles';
 
 export class Gateway {
 	private auth: AuthRouter;
@@ -36,9 +37,19 @@ export class Gateway {
 		const { session, accessJwt } = await this.strat.resolve(request, this.env);
 
 		// Enforce auth if route requires it
-		if (rule.auth === 'required' && !session) {
-			const returnTo = encodeURIComponent(url.pathname + url.search);
-			return Response.redirect(`${this.cfg.publicBaseUrl}/auth/login?returnTo=${returnTo}`, 302);
+		if (rule.auth === 'required') {
+			if (!session) {
+				const returnTo = encodeURIComponent(url.pathname + url.search);
+				return Response.redirect(`${this.cfg.publicBaseUrl}/auth/login?returnTo=${returnTo}`, 302);
+			}
+
+			if (rule.requireRolesAll && !hasAllRoles(session.systemRoles, rule.requireRolesAll)) {
+				return new Response('Forbidden', { status: 403 });
+			}
+
+			if (rule.requireRolesAny && !hasAnyRole(session.systemRoles, rule.requireRolesAny)) {
+				return new Response('Forbidden', { status: 403 });
+			}
 		}
 
 		// Prepare forwarded request with appropriate headers

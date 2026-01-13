@@ -8,6 +8,7 @@ interface DB {
 	users: {
 		id: Generated<string>; // uuid DEFAULT uuid_generate_v4()
 		email: string; // unique
+		system_roles: Generated<string[]>; // text[]
 		created_at: Generated<Date>; // DEFAULT now()
 	};
 	user_identities: {
@@ -146,6 +147,12 @@ export class PostgresUserStore implements UserStore {
 			}
 			// already linked to same user → no-op
 		}
+	}
+
+	async getUserRoles(userId: string): Promise<string[]> {
+		const row = await this.db.selectFrom('users').select('system_roles').where('id', '=', userId).executeTakeFirst();
+
+		return row?.system_roles ?? [];
 	}
 
 	async destroy(): Promise<void> {
