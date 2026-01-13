@@ -27,8 +27,8 @@ export async function verifyGatewayUser(
 	const secret = env[cfg.propagation.hmacSecretEnv];
 	if (!secret) throw new Error('missing_hmac_secret');
 
-	const expected = await signHmac(payloadB64, secret);
-	if (!timingSafeEqual(expected, sig)) {
+	const computedSig = await signHmac(payloadB64, secret);
+	if (!timingSafeEqual(computedSig, sig)) {
 		if (options.require) throw new Error('bad_user_sig');
 		return null;
 	}
@@ -71,14 +71,16 @@ function isPropagatedUserPayload(x: unknown): x is PropagatedUserPayload {
 }
 
 /**
- * Timing-safe-ish compare for short strings.
- * (Avoids early-return. Still better than `===`.)
+ * Timing-safe compare for short strings.
+ * (Avoids early-return. Better than `===`.)
  */
 function timingSafeEqual(a: string, b: string): boolean {
-	if (a.length !== b.length) return false;
-	let out = 0;
-	for (let i = 0; i < a.length; i++) {
-		out |= a.charCodeAt(i) ^ b.charCodeAt(i);
+	let out = a.length ^ b.length;
+	const len = Math.max(a.length, b.length);
+	for (let i = 0; i < len; i++) {
+		const ca = i < a.length ? a.charCodeAt(i) : 0;
+		const cb = i < b.length ? b.charCodeAt(i) : 0;
+		out |= ca ^ cb;
 	}
 	return out === 0;
 }
