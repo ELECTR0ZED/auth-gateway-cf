@@ -17,3 +17,4 @@ export function defineConfig(config: ProjectConfig): ProjectConfig {
 }
 
 export type * from './types';
+export * from './utils/verifyInternal';
