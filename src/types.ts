@@ -115,6 +115,37 @@ export interface SessionStrategy {
 }
 
 /* =========================================
+ * Auth Config
+ * =======================================*/
+
+export type OAuthCfg = {
+	enabled: boolean;
+};
+
+export type PasswordPolicy = {
+	minLength: number;
+	requireUppercase?: boolean;
+	requireLowercase?: boolean;
+	requireNumber?: boolean;
+	requireSymbol?: boolean;
+};
+
+export type PasswordAuthCfg = {
+	enabled: boolean;
+
+	/**
+	 * Env var that contains comma-separated peppers (newest first).
+	 * Example value: "pepper_v2,pepper_v1"
+	 *
+	 * Defaults to "PASSWORD_PEPPERS" if omitted.
+	 */
+	pepperEnv?: string;
+
+	policy?: PasswordPolicy;
+	allowSignup?: boolean;
+};
+
+/* =========================================
  * Propagation / Project Config
  * =======================================*/
 
@@ -134,11 +165,13 @@ export type ProjectConfig = {
 	projectName: string;
 	publicBaseUrl: string;
 	routes: RouteRule[];
-	providers: ProviderConfig[];
-	defaultProvider: LoginProviderId;
+	providers?: ProviderConfig[];
+	defaultProvider?: LoginProviderId;
 	session: SessionStrategyCfg;
 	propagation: PropagationCfg;
 	userStore: UserStoreCfg;
+	oAuth?: OAuthCfg;
+	passwordAuth?: PasswordAuthCfg;
 };
 
 /* =========================================
@@ -157,6 +190,11 @@ export interface UserStore {
 	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
 	getUserRoles(userId: string): Promise<SystemRole[]>;
+
+	createUserWithPassword(emailLower: string, passwordHash: string): Promise<string>;
+	getPasswordHashByUserId(userId: string): Promise<string | null>;
+	getUserIdByEmailForPassword(emailLower: string): Promise<{ userId: string; passwordHash: string } | null>;
+	setPasswordHash(userId: string, passwordHash: string): Promise<void>;
 }
 
 /* =========================================

@@ -1,5 +1,6 @@
 import { DurableObject } from 'cloudflare:workers';
 import type { StoredSession } from '../types';
+import { json } from '../utils/http';
 
 type DOStored = StoredSession & {
 	expiresAt: number;
@@ -119,11 +120,4 @@ export class SessionDO extends DurableObject {
 		await this.ctx.storage.delete('session');
 		await this.ctx.storage.deleteAlarm?.();
 	}
-}
-
-function json(obj: unknown, init: ResponseInit = {}): Response {
-	return new Response(JSON.stringify(obj), {
-		...init,
-		headers: { 'content-type': 'application/json' },
-	});
 }

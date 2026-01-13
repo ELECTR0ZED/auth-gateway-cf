@@ -20,5 +20,12 @@ CREATE TABLE IF NOT EXISTS user_identities (
 CREATE INDEX IF NOT EXISTS idx_user_identities_user_id
     ON user_identities (user_id);
 
+CREATE TABLE IF NOT EXISTS user_passwords (
+	user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+	password_hash TEXT NOT NULL,
+	created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- ALTER TABLE users
 -- ADD COLUMN IF NOT EXISTS system_roles TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
