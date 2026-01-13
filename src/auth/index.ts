@@ -121,18 +121,20 @@ export class AuthRouter {
 	 */
 	private async callback(request: Request, url: URL): Promise<Response> {
 		const providerParam = url.searchParams.get('provider') ?? undefined;
+		const returnTo = safeReturnTo(url.searchParams.get('returnTo') ?? undefined, this.cfg.publicBaseUrl);
 
 		let picked: { impl: AuthProvider; cfg: ProviderConfig };
 		try {
 			picked = this.pickProvider(providerParam);
 		} catch {
-			return this.redirectError('provider_unavailable', url.searchParams.get('returnTo') ?? undefined);
+			return this.redirectError('provider_unavailable', returnTo);
 		}
 		const { impl, cfg } = picked;
 
 		const code = url.searchParams.get('code')!;
 		const state = url.searchParams.get('state')!;
 		const { verifier, info } = await consumeShortState(this.cfg.userStore.shortStateKV, state);
+		const shortStateReturnTo = safeReturnTo(info.returnTo, this.cfg.publicBaseUrl);
 
 		const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
 		const identity = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);
@@ -142,12 +144,12 @@ export class AuthRouter {
 
 		const email = normEmail(identity.email);
 		if (!email) {
-			return this.redirectError('email_required', info.returnTo);
+			return this.redirectError('email_required', shortStateReturnTo);
 		}
 
 		if (info.mode === 'link') {
 			if (!activeSession) {
-				return this.redirectError('link_requires_login', info.returnTo);
+				return this.redirectError('link_requires_login', shortStateReturnTo);
 			}
 			try {
 				await this.store.addIdentityToUser(activeSession.userId, {
@@ -157,11 +159,11 @@ export class AuthRouter {
 				});
 			} catch (e: unknown) {
 				const code = (e as Error)?.message === 'identity_taken' ? 'identity_taken' : 'link_failed';
-				return this.redirectError(code, info.returnTo);
+				return this.redirectError(code, shortStateReturnTo);
 			}
 			return new Response(null, {
 				status: 302,
-				headers: { Location: info.returnTo || '/' },
+				headers: { Location: shortStateReturnTo || '/' },
 			});
 		}
 
@@ -170,7 +172,7 @@ export class AuthRouter {
 		if (byIdentity) {
 			const response = new Response(null, {
 				status: 302,
-				headers: { Location: info.returnTo || '/' },
+				headers: { Location: shortStateReturnTo || '/' },
 			});
 			const systemRoles = await this.store.getUserRoles(byIdentity);
 			const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
@@ -185,7 +187,7 @@ export class AuthRouter {
 
 		const byEmail = await this.store.findUserIdByEmail(email);
 		if (byEmail) {
-			return this.redirectError('account_exists', info.returnTo);
+			return this.redirectError('account_exists', shortStateReturnTo);
 		}
 
 		let userId: string;
@@ -197,12 +199,12 @@ export class AuthRouter {
 			});
 		} catch (e: unknown) {
 			const code = (e as Error)?.message === 'account_exists' ? 'account_exists' : 'signup_failed';
-			return this.redirectError(code, info.returnTo);
+			return this.redirectError(code, shortStateReturnTo);
 		}
 
 		const response = new Response(null, {
 			status: 302,
-			headers: { Location: info.returnTo || '/' },
+			headers: { Location: shortStateReturnTo || '/' },
 		});
 		const systemRoles = await this.store.getUserRoles(userId);
 		await this.applyIssuedCookies(response, { userId, email: identity.email, systemRoles });
@@ -314,7 +316,7 @@ export class AuthRouter {
 			return json({ error: 'signup_failed' }, { status: 500 });
 		}
 
-		const returnTo = url.searchParams.get('returnTo') || '/';
+		const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/', this.cfg.publicBaseUrl);
 
 		const res = new Response(null, {
 			status: 302,
@@ -349,7 +351,8 @@ export class AuthRouter {
 
 		// Reduce timing differences: always verify against some hash
 		if (!row) {
-			await verifyPassword(password, getFakeStoredHash(), peppers[0]); // ignore result
+			const primaryPepper = peppers[0];
+			await verifyPassword(password, getFakeStoredHash(), primaryPepper);
 			return json({ error: 'invalid_credentials' }, { status: 401 });
 		}
 
