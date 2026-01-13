@@ -57,12 +57,15 @@ export class AuthRouter {
 			case '/auth/password/signup':
 			case '/auth/password/register':
 				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 				return this.passwordRegister(request, url);
 			case '/auth/password/login':
 				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 				return this.passwordLogin(request, url);
 			case '/auth/password/change':
 				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 				return this.passwordChange(request);
 			default:
 				return new Response('Not Found', { status: 404 });

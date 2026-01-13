@@ -21,7 +21,7 @@ export function getFakeStoredHash(): string {
 	// Best-effort cache per isolate; fine if it resets on cold start.
 	if (cachedFake) return cachedFake;
 
-	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const salt = crypto.getRandomValues(new Uint8Array(32));
 	const dk = crypto.getRandomValues(new Uint8Array(32)); // dkLen must match your DEFAULT_PARAMS.dkLen
 
 	const saltB64u = b64urlEncodeBytes(salt);
