@@ -39,7 +39,7 @@ export async function hashPassword(
 		params?: Partial<typeof DEFAULT_PARAMS>;
 	},
 ): Promise<string> {
-	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const salt = crypto.getRandomValues(new Uint8Array(32));
 	const saltB64u = b64urlEncodeBytes(salt);
 
 	const params = { ...DEFAULT_PARAMS, ...options?.params };
