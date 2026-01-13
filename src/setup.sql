@@ -21,4 +21,4 @@ CREATE INDEX IF NOT EXISTS idx_user_identities_user_id
     ON user_identities (user_id);
 
 -- ALTER TABLE users
--- ADD COLUMN IF NOT EXISTS roles TEXT[] NOT NULL
+-- ADD COLUMN IF NOT EXISTS system_roles TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];
