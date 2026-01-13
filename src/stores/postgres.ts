@@ -19,6 +19,12 @@ interface DB {
 		subject: string;
 		created_at: Generated<Date>; // DEFAULT now()
 	};
+	user_passwords: {
+		user_id: string; // uuid -> users.id
+		password_hash: string; // stored hash
+		created_at: Generated<Date>; // DEFAULT now()
+		updated_at: Generated<Date>; // DEFAULT now()
+	};
 }
 
 export class PostgresUserStore implements UserStore {
@@ -153,6 +159,39 @@ export class PostgresUserStore implements UserStore {
 		const row = await this.db.selectFrom('users').select('system_roles').where('id', '=', userId).executeTakeFirst();
 
 		return row?.system_roles ?? [];
+	}
+
+	async getUserIdByEmailForPassword(email: string): Promise<{ userId: string; passwordHash: string } | null> {
+		const row = await this.db
+			.selectFrom('users as u')
+			.innerJoin('user_passwords as up', 'up.user_id', 'u.id')
+			.select(['u.id as userId', 'up.password_hash as passwordHash'])
+			.where('u.email', '=', email)
+			.executeTakeFirst();
+
+		return row ?? null;
+	}
+
+	async getPasswordHashByUserId(userId: string): Promise<string | null> {
+		const row = await this.db.selectFrom('user_passwords').select(['password_hash']).where('user_id', '=', userId).executeTakeFirst();
+
+		return row?.password_hash ?? null;
+	}
+
+	async setPasswordHash(userId: string, passwordHash: string): Promise<void> {
+		await this.db
+			.insertInto('user_passwords')
+			.values({
+				user_id: userId,
+				password_hash: passwordHash,
+			})
+			.onConflict((oc) =>
+				oc.column('user_id').doUpdateSet({
+					password_hash: passwordHash,
+					updated_at: new Date(),
+				}),
+			)
+			.execute();
 	}
 
 	async destroy(): Promise<void> {

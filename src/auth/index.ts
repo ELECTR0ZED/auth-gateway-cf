@@ -1,8 +1,11 @@
-import type { ProjectConfig, UserStore, SessionStrategy } from '../types';
+import type { ProjectConfig, UserStore, SessionStrategy, Session } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
 import { normEmail } from '../utils/helpers';
 import { safeReturnTo } from '../utils/returnTo';
+import { json } from '../utils/http';
+import { makeCsrfToken, csrfCookie, sameOrigin, requireCsrfJson } from '../utils/csrf';
+import { getPeppers, hashPassword, verifyPasswordWithPepperRotation, needsRehash } from '../utils/passwords';
 
 export class AuthRouter {
 	constructor(
@@ -33,6 +36,15 @@ export class AuthRouter {
 				return this.callback(request, url);
 			case '/auth/logout':
 				return this.logout();
+			case '/auth/csrf':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				return this.csrf();
+			case '/auth/password/login':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				return this.passwordLogin(request, url);
+			case '/auth/password/change':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				return this.passwordChange(request);
 			default:
 				return new Response('Not Found', { status: 404 });
 		}
@@ -158,10 +170,7 @@ export class AuthRouter {
 			headers: { Location: info.returnTo || '/' },
 		});
 		const systemRoles = await this.store.getUserRoles(userId);
-		const issued = await this.strat.issue?.({ userId, email, systemRoles }, this.env);
-		if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
-		if (issued?.accessJwt)
-			response.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);
+		await this.applyIssuedCookies(response, { userId, email: identity.email, systemRoles });
 		return response;
 	}
 
@@ -217,5 +226,112 @@ export class AuthRouter {
 			status: 302,
 			headers: { Location: `/${'?auth_error=' + code}` },
 		});
+	}
+
+	private csrf(): Response {
+		const token = makeCsrfToken();
+		const res = json({ csrf: token });
+		res.headers.append('Set-Cookie', csrfCookie(token));
+		return res;
+	}
+
+	private async passwordLogin(request: Request, url: URL): Promise<Response> {
+		if (!sameOrigin(request, this.cfg.publicBaseUrl)) {
+			return new Response('Forbidden', { status: 403 });
+		}
+
+		const parsed = await requireCsrfJson<{ email?: string; password?: string; csrf?: string }>(request);
+		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
+
+		const emailRaw = parsed.body.email;
+		const password = parsed.body.password;
+
+		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length < 1) {
+			return json({ error: 'invalid_request' }, { status: 400 });
+		}
+
+		const email = normEmail(emailRaw);
+		const returnTo = url.searchParams.get('returnTo') || '/';
+
+		const row = await this.store.getUserIdByEmailForPassword(email);
+
+		// Reduce timing differences: always verify against some hash
+		const peppers = getPeppers(this.env, this.pepperEnvName());
+		const fakeHash = await hashPassword('invalid-password', { pepper: peppers[0] });
+
+		const storedHash = row?.passwordHash ?? fakeHash;
+		const verify = await verifyPasswordWithPepperRotation(password, storedHash, peppers);
+
+		if (!row || !verify.ok) {
+			return json({ error: 'invalid_credentials' }, { status: 401 });
+		}
+
+		// Rotate pepper/params on successful login
+		if (verify.usedPepperIndex !== 0 || needsRehash(row.passwordHash)) {
+			const newHash = await hashPassword(password, { pepper: peppers[0] });
+			await this.store.setPasswordHash(row.userId, newHash);
+		}
+
+		const res = new Response(null, {
+			status: 302,
+			headers: { Location: returnTo || '/' },
+		});
+		const systemRoles = await this.store.getUserRoles(row.userId);
+		await this.applyIssuedCookies(res, { userId: row.userId, email, systemRoles });
+		return res;
+	}
+
+	private async passwordChange(request: Request): Promise<Response> {
+		if (!sameOrigin(request, this.cfg.publicBaseUrl)) {
+			return new Response('Forbidden', { status: 403 });
+		}
+
+		const resolved = await this.strat.resolve(request, this.env);
+		const session = resolved.session;
+		if (!session) return json({ error: 'unauthorized' }, { status: 401 });
+
+		const parsed = await requireCsrfJson<{ currentPassword?: string; newPassword?: string; csrf?: string }>(request);
+		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
+
+		const currentPassword = parsed.body.currentPassword;
+		const newPassword = parsed.body.newPassword;
+
+		if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
+			return json({ error: 'invalid_request' }, { status: 400 });
+		}
+		if (newPassword.length < 12) {
+			return json({ error: 'password_too_short' }, { status: 400 });
+		}
+
+		const existingHash = await this.store.getPasswordHashByUserId(session.userId);
+		if (!existingHash) return json({ error: 'password_not_set' }, { status: 400 });
+
+		const peppers = getPeppers(this.env, this.pepperEnvName());
+		const verify = await verifyPasswordWithPepperRotation(currentPassword, existingHash, peppers);
+		if (!verify.ok) return json({ error: 'invalid_credentials' }, { status: 401 });
+
+		const newHash = await hashPassword(newPassword, { pepper: peppers[0] });
+		await this.store.setPasswordHash(session.userId, newHash);
+
+		// Rotate session after password change (recommended)
+		const res = json({ ok: true }, { status: 200 });
+		await this.applyIssuedCookies(res, { userId: session.userId, email: session.email, systemRoles: session.systemRoles });
+		return res;
+	}
+
+	private async applyIssuedCookies(res: Response, session: Session) {
+		const issued = await this.strat.issue?.(session, this.env);
+		if (issued?.cookie) res.headers.append('Set-Cookie', issued.cookie);
+		if (issued?.accessJwt) {
+			res.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);
+		}
+	}
+
+	private passwordEnabled(): boolean {
+		return this.cfg.passwordAuth?.enabled === true;
+	}
+
+	private pepperEnvName(): string {
+		return this.cfg.passwordAuth?.pepperEnv ?? 'PASSWORD_PEPPERS';
 	}
 }

@@ -12,6 +12,10 @@ defineConfig({
 			clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
 		},
 	],
+	passwordAuth: {
+		enabled: true,
+		pepperEnv: 'PASSWORD_PEPPERS',
+	},
 	defaultProvider: 'google',
 	session: {
 		kind: 'durableObject',

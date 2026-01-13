@@ -115,6 +115,22 @@ export interface SessionStrategy {
 }
 
 /* =========================================
+ * Password Auth Config
+ * =======================================*/
+
+export type PasswordAuthCfg = {
+	enabled: boolean;
+
+	/**
+	 * Env var that contains comma-separated peppers (newest first).
+	 * Example value: "pepper_v2,pepper_v1"
+	 *
+	 * Defaults to "PASSWORD_PEPPERS" if omitted.
+	 */
+	pepperEnv?: string;
+};
+
+/* =========================================
  * Propagation / Project Config
  * =======================================*/
 
@@ -139,6 +155,7 @@ export type ProjectConfig = {
 	session: SessionStrategyCfg;
 	propagation: PropagationCfg;
 	userStore: UserStoreCfg;
+	passwordAuth?: PasswordAuthCfg;
 };
 
 /* =========================================
@@ -157,6 +174,10 @@ export interface UserStore {
 	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
 	getUserRoles(userId: string): Promise<SystemRole[]>;
+
+	getPasswordHashByUserId(userId: string): Promise<string | null>;
+	getUserIdByEmailForPassword(emailLower: string): Promise<{ userId: string; passwordHash: string } | null>;
+	setPasswordHash(userId: string, passwordHash: string): Promise<void>;
 }
 
 /* =========================================
