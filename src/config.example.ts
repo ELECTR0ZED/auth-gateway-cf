@@ -18,6 +18,11 @@ defineConfig({
 	passwordAuth: {
 		enabled: true,
 		pepperEnv: 'PASSWORD_PEPPERS',
+		turnstile: {
+			enabled: true,
+			secretEnv: 'TURNSTILE_SECRET',
+			tokenField: 'turnstileToken',
+		},
 	},
 	defaultProvider: 'google',
 	session: {
