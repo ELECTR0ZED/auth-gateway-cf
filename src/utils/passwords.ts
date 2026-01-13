@@ -27,7 +27,7 @@ export function getFakeStoredHash(): string {
 	const saltB64u = b64urlEncodeBytes(salt);
 	const dkB64u = b64urlEncodeBytes(dk);
 
-	cachedFake = `pbkdf2$SHA-256$600000$32$${saltB64u}$${dkB64u}`;
+	cachedFake = `pbkdf2$SHA-256$800000$32$${saltB64u}$${dkB64u}`;
 	return cachedFake;
 }
 

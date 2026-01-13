@@ -358,7 +358,7 @@ export class AuthRouter {
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
 
-		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length < 1) {
+		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length === 0) {
 			return json({ error: 'invalid_request' }, { status: 400 });
 		}
 
