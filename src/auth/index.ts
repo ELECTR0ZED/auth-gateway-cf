@@ -1,6 +1,8 @@
 import type { ProjectConfig, UserStore, SessionStrategy } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
+import { normEmail } from '../utils/helpers';
+import { safeReturnTo } from '../utils/returnTo';
 
 export class AuthRouter {
 	constructor(
@@ -48,7 +50,8 @@ export class AuthRouter {
 	private async loginOrLink(request: Request, url: URL): Promise<Response> {
 		const mode = url.pathname.endsWith('/link') ? 'link' : 'login';
 		const { impl, cfg } = this.pickProvider(url.searchParams.get('provider') ?? undefined);
-		const returnTo = url.searchParams.get('returnTo') ?? undefined;
+		const rawReturnTo = url.searchParams.get('returnTo') ?? undefined;
+		const returnTo = safeReturnTo(rawReturnTo, this.cfg.publicBaseUrl);
 
 		const { session } = await this.strat.resolve(request, this.env);
 
@@ -90,7 +93,8 @@ export class AuthRouter {
 		const resolved = await this.strat.resolve(request, this.env);
 		const activeSession = resolved.session;
 
-		if (!identity.email) {
+		const email = normEmail(identity.email);
+		if (!email) {
 			return this.redirectError('email_required', info.returnTo);
 		}
 
@@ -121,7 +125,7 @@ export class AuthRouter {
 				status: 302,
 				headers: { Location: info.returnTo || '/' },
 			});
-			const issued = await this.strat.issue?.({ userId: byIdentity, email: identity.email }, this.env);
+			const issued = await this.strat.issue?.({ userId: byIdentity, email: email }, this.env);
 			if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
 			if (issued?.accessJwt)
 				response.headers.append(
@@ -131,7 +135,6 @@ export class AuthRouter {
 			return response;
 		}
 
-		const email = identity.email;
 		const byEmail = await this.store.findUserIdByEmail(email);
 		if (byEmail) {
 			return this.redirectError('account_exists', info.returnTo);

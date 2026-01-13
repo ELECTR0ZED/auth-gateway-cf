@@ -86,10 +86,27 @@ export abstract class AuthProvider {
 
 		let claims: unknown = {};
 		if (this.claimsMode === 'id_token') {
-			if (typeof json.id_token !== 'string') {
-				throw new Error('id_token_missing');
+			if (typeof json.id_token !== 'string') throw new Error('id_token_missing');
+
+			const decoded = this.parseJwt(json.id_token) as Record<string, unknown>;
+			claims = decoded;
+
+			const issuer = (cfg.issuer ?? this.defaultIssuer) || '';
+
+			// iss
+			if (typeof decoded.iss === 'string' && decoded.iss !== issuer) {
+				throw new Error('bad_issuer');
 			}
-			claims = this.parseJwt(json.id_token);
+
+			// aud (string or string[])
+			const aud = decoded.aud;
+			const okAud = (typeof aud === 'string' && aud === cfg.clientId) || (Array.isArray(aud) && aud.includes(cfg.clientId));
+			if (!okAud) throw new Error('bad_audience');
+
+			// exp
+			const exp = decoded.exp;
+			const now = Math.floor(Date.now() / 1000);
+			if (typeof exp === 'number' && now >= exp) throw new Error('id_token_expired');
 		} else if (this.claimsMode === 'userinfo') {
 			if (!this.userInfoEndpoint || typeof json.access_token !== 'string') {
 				throw new Error('userinfo_unavailable');
@@ -123,6 +140,12 @@ export abstract class AuthProvider {
 	protected parseJwt(token: string): unknown {
 		const [, p] = token.split('.');
 		if (!p) return {};
-		return JSON.parse(atob(p.replace(/-/g, '+').replace(/_/g, '/')));
+
+		// base64url -> base64 with padding
+		let b64 = p.replace(/-/g, '+').replace(/_/g, '/');
+		const pad = b64.length % 4;
+		if (pad) b64 += '='.repeat(4 - pad);
+
+		return JSON.parse(atob(b64));
 	}
 }

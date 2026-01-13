@@ -22,7 +22,7 @@ export class GoogleProvider extends AuthProvider {
 			defaultIssuer: 'https://accounts.google.com',
 			defaultScope: 'openid email profile',
 			userInfoEndpoint: 'https://openidconnect.googleapis.com/v1/userinfo',
-			claimsMode: 'id_token',
+			claimsMode: 'userinfo',
 		});
 	}
 
