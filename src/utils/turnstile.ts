@@ -13,15 +13,24 @@ export async function verifyTurnstile(token: string, secret: string, remoteip?: 
 		return { ok: false, code: 'turnstile_missing' };
 	}
 
+	if (!secret || typeof secret !== 'string') {
+		return { ok: false, code: 'turnstile_misconfigured' };
+	}
+
 	const form = new FormData();
 	form.append('secret', secret);
 	form.append('response', token);
 	if (remoteip) form.append('remoteip', remoteip);
 
-	const res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
-		method: 'POST',
-		body: form,
-	});
+	let res: Response;
+	try {
+		res = await fetch('https://challenges.cloudflare.com/turnstile/v0/siteverify', {
+			method: 'POST',
+			body: form,
+		});
+	} catch {
+		return { ok: false, code: 'turnstile_unavailable' };
+	}
 
 	if (!res.ok) {
 		return { ok: false, code: 'turnstile_unavailable' };

@@ -508,7 +508,7 @@ export class AuthRouter {
 
 		const field = this.turnstileTokenField();
 		const token = body[field];
-		if (typeof token !== 'string' || token.length < 10) {
+		if (typeof token !== 'string' || token.trim().length === 0) {
 			return { ok: false, code: 'turnstile_missing' };
 		}
 
