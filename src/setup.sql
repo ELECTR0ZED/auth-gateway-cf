@@ -27,7 +27,5 @@ CREATE TABLE IF NOT EXISTS user_passwords (
 	updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE INDEX IF NOT EXISTS idx_user_passwords_user_id ON user_passwords(user_id);
-
 -- ALTER TABLE users
 -- ADD COLUMN IF NOT EXISTS system_roles TEXT[] NOT NULL DEFAULT ARRAY[]::TEXT[];

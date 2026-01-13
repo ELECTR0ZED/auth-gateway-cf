@@ -161,6 +161,34 @@ export class PostgresUserStore implements UserStore {
 		return row?.system_roles ?? [];
 	}
 
+	async createUserWithPassword(email: string, passwordHash: string): Promise<string> {
+		return this.db.transaction().execute(async (trx) => {
+			// Create user (email unique). If it already exists -> account_exists
+			const insertedUser = await trx
+				.insertInto('users')
+				.values({ email })
+				.onConflict((oc) => oc.column('email').doNothing())
+				.returning(['id'])
+				.executeTakeFirst();
+
+			const userId = insertedUser?.id;
+			if (!userId) {
+				throw new Error('account_exists');
+			}
+
+			// Attach password hash (should succeed; user_id PK)
+			await trx
+				.insertInto('user_passwords')
+				.values({
+					user_id: userId,
+					password_hash: passwordHash,
+				})
+				.execute();
+
+			return userId;
+		});
+	}
+
 	async getUserIdByEmailForPassword(email: string): Promise<{ userId: string; passwordHash: string } | null> {
 		const row = await this.db
 			.selectFrom('users as u')

@@ -1,11 +1,20 @@
-import type { ProjectConfig, UserStore, SessionStrategy, Session } from '../types';
+import type { ProjectConfig, UserStore, SessionStrategy, Session, ProviderConfig } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
 import { normEmail } from '../utils/helpers';
 import { safeReturnTo } from '../utils/returnTo';
 import { json } from '../utils/http';
 import { makeCsrfToken, csrfCookie, sameOrigin, requireCsrfJson } from '../utils/csrf';
-import { getPeppers, hashPassword, verifyPasswordWithPepperRotation, needsRehash } from '../utils/passwords';
+import {
+	getPeppers,
+	hashPassword,
+	verifyPasswordWithPepperRotation,
+	needsRehash,
+	verifyPassword,
+	getFakeStoredHash,
+} from '../utils/passwords';
+import { AuthProvider } from '../providers/baseProvider';
+import { getPasswordPolicy, validatePassword } from '../utils/passwordPolicy';
 
 export class AuthRouter {
 	constructor(
@@ -23,6 +32,9 @@ export class AuthRouter {
 	 * @returns {Promise<Response>}
 	 */
 	async handle(request: Request): Promise<Response> {
+		if (!this.authFeatureEnabled()) {
+			return new Response('Not Found', { status: 404 });
+		}
 		const url = new URL(request.url);
 		if (!/^\/auth(\/|$)/.test(url.pathname)) {
 			return new Response('Not Found', { status: 404 });
@@ -30,15 +42,22 @@ export class AuthRouter {
 
 		switch (url.pathname) {
 			case '/auth/login':
+			case '/auth/signin':
 			case '/auth/link':
+				if (!this.oauthEnabled()) return new Response('Not Found', { status: 404 });
 				return this.loginOrLink(request, url);
 			case '/auth/callback':
+				if (!this.oauthEnabled()) return new Response('Not Found', { status: 404 });
 				return this.callback(request, url);
 			case '/auth/logout':
 				return this.logout();
 			case '/auth/csrf':
 				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
 				return this.csrf();
+			case '/auth/password/signup':
+			case '/auth/password/register':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				return this.passwordRegister(request, url);
 			case '/auth/password/login':
 				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
 				return this.passwordLogin(request, url);
@@ -61,7 +80,15 @@ export class AuthRouter {
 	 */
 	private async loginOrLink(request: Request, url: URL): Promise<Response> {
 		const mode = url.pathname.endsWith('/link') ? 'link' : 'login';
-		const { impl, cfg } = this.pickProvider(url.searchParams.get('provider') ?? undefined);
+
+		let picked: { impl: AuthProvider; cfg: ProviderConfig };
+		try {
+			picked = this.pickProvider(url.searchParams.get('provider') ?? undefined);
+		} catch {
+			return this.redirectError('provider_unavailable', url.searchParams.get('returnTo') ?? undefined);
+		}
+		const { impl, cfg } = picked;
+
 		const rawReturnTo = url.searchParams.get('returnTo') ?? undefined;
 		const returnTo = safeReturnTo(rawReturnTo, this.cfg.publicBaseUrl);
 
@@ -94,7 +121,15 @@ export class AuthRouter {
 	 */
 	private async callback(request: Request, url: URL): Promise<Response> {
 		const providerParam = url.searchParams.get('provider') ?? undefined;
-		const { impl, cfg } = this.pickProvider(providerParam);
+
+		let picked: { impl: AuthProvider; cfg: ProviderConfig };
+		try {
+			picked = this.pickProvider(providerParam);
+		} catch {
+			return this.redirectError('provider_unavailable', url.searchParams.get('returnTo') ?? undefined);
+		}
+		const { impl, cfg } = picked;
+
 		const code = url.searchParams.get('code')!;
 		const state = url.searchParams.get('state')!;
 		const { verifier, info } = await consumeShortState(this.cfg.userStore.shortStateKV, state);
@@ -198,9 +233,10 @@ export class AuthRouter {
 	 * @returns {{ impl: any; cfg: any; }}
 	 */
 	private pickProvider(explicit?: string) {
-		const id = explicit || this.cfg.defaultProvider || this.cfg.providers.find((p) => p.enabled)?.id;
+		const providers = this.cfg.providers ?? [];
+		const id = explicit || this.cfg.defaultProvider || providers.find((p) => p.enabled)?.id;
 
-		const cfg = this.cfg.providers.find((p) => p.id === id && p.enabled);
+		const cfg = providers.find((p) => p.id === id && p.enabled);
 		if (!cfg) throw new Error('No provider available');
 
 		const impl = ProviderRegistry[cfg.id];
@@ -235,6 +271,60 @@ export class AuthRouter {
 		return res;
 	}
 
+	private async passwordRegister(request: Request, url: URL): Promise<Response> {
+		if (!this.passwordSignupAllowed()) {
+			return new Response('Not Found', { status: 404 });
+		}
+
+		if (!sameOrigin(request, this.cfg.publicBaseUrl)) {
+			return new Response('Forbidden', { status: 403 });
+		}
+
+		const parsed = await requireCsrfJson<Record<string, unknown>>(request);
+		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
+
+		const emailRaw = parsed.body.email;
+		const password = parsed.body.password;
+
+		if (typeof emailRaw !== 'string' || typeof password !== 'string') {
+			return json({ error: 'invalid_request' }, { status: 400 });
+		}
+
+		const email = normEmail(emailRaw);
+
+		const account = await this.store.findUserIdByEmail(email);
+		if (account) {
+			return json({ error: 'account_exists' }, { status: 400 });
+		}
+
+		const policy = getPasswordPolicy(this.cfg.passwordAuth?.policy);
+		const check = validatePassword(password, policy);
+		if (!check.ok) {
+			// Keep generic unless you explicitly want to expose reasons
+			return json({ error: 'password_policy_violation' }, { status: 400 });
+		}
+
+		const peppers = getPeppers(this.env, this.pepperEnvName());
+		const passwordHash = await hashPassword(password, { pepper: peppers[0] });
+
+		let userId: string;
+		try {
+			userId = await this.store.createUserWithPassword(email, passwordHash);
+		} catch (_: unknown) {
+			return json({ error: 'signup_failed' }, { status: 500 });
+		}
+
+		const returnTo = url.searchParams.get('returnTo') || '/';
+
+		const res = new Response(null, {
+			status: 302,
+			headers: { Location: returnTo || '/' },
+		});
+
+		await this.applyIssuedCookies(res, { userId, email, systemRoles: [] });
+		return res;
+	}
+
 	private async passwordLogin(request: Request, url: URL): Promise<Response> {
 		if (!sameOrigin(request, this.cfg.publicBaseUrl)) {
 			return new Response('Forbidden', { status: 403 });
@@ -255,11 +345,15 @@ export class AuthRouter {
 
 		const row = await this.store.getUserIdByEmailForPassword(email);
 
-		// Reduce timing differences: always verify against some hash
 		const peppers = getPeppers(this.env, this.pepperEnvName());
-		const fakeHash = await hashPassword('invalid-password', { pepper: peppers[0] });
 
-		const storedHash = row?.passwordHash ?? fakeHash;
+		// Reduce timing differences: always verify against some hash
+		if (!row) {
+			await verifyPassword(password, getFakeStoredHash(), peppers[0]); // ignore result
+			return json({ error: 'invalid_credentials' }, { status: 401 });
+		}
+
+		const storedHash = row.passwordHash;
 		const verify = await verifyPasswordWithPepperRotation(password, storedHash, peppers);
 
 		if (!row || !verify.ok) {
@@ -299,8 +393,11 @@ export class AuthRouter {
 		if (typeof currentPassword !== 'string' || typeof newPassword !== 'string') {
 			return json({ error: 'invalid_request' }, { status: 400 });
 		}
-		if (newPassword.length < 12) {
-			return json({ error: 'password_too_short' }, { status: 400 });
+		const policy = this.passwordPolicy();
+		const check = validatePassword(newPassword, policy);
+
+		if (!check.ok) {
+			return json({ error: 'password_policy_violation' }, { status: 400 });
 		}
 
 		const existingHash = await this.store.getPasswordHashByUserId(session.userId);
@@ -327,11 +424,27 @@ export class AuthRouter {
 		}
 	}
 
+	private oauthEnabled(): boolean {
+		return this.cfg.oAuth?.enabled !== false; // default ON for backwards compatibility
+	}
+
 	private passwordEnabled(): boolean {
 		return this.cfg.passwordAuth?.enabled === true;
 	}
 
+	private authFeatureEnabled(): boolean {
+		return this.oauthEnabled() || this.passwordEnabled();
+	}
+
 	private pepperEnvName(): string {
 		return this.cfg.passwordAuth?.pepperEnv ?? 'PASSWORD_PEPPERS';
+	}
+
+	private passwordPolicy() {
+		return getPasswordPolicy(this.cfg.passwordAuth?.policy);
+	}
+
+	private passwordSignupAllowed(): boolean {
+		return this.cfg.passwordAuth?.allowSignup === true;
 	}
 }

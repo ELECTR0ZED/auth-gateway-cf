@@ -15,6 +15,22 @@ const DEFAULT_PARAMS = {
 	dkLen: 32,
 };
 
+let cachedFake: string | null = null;
+
+export function getFakeStoredHash(): string {
+	// Best-effort cache per isolate; fine if it resets on cold start.
+	if (cachedFake) return cachedFake;
+
+	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const dk = crypto.getRandomValues(new Uint8Array(32)); // dkLen must match your DEFAULT_PARAMS.dkLen
+
+	const saltB64u = b64urlEncodeBytes(salt);
+	const dkB64u = b64urlEncodeBytes(dk);
+
+	cachedFake = `pbkdf2$SHA-256$600000$32$${saltB64u}$${dkB64u}`;
+	return cachedFake;
+}
+
 /**
  * PASSWORD_PEPPERS format:
  *	"pepper_v2,pepper_v1" (newest first)
@@ -39,7 +55,7 @@ export async function hashPassword(
 		params?: Partial<typeof DEFAULT_PARAMS>;
 	},
 ): Promise<string> {
-	const salt = crypto.getRandomValues(new Uint8Array(16));
+	const salt = crypto.getRandomValues(new Uint8Array(32));
 	const saltB64u = b64urlEncodeBytes(salt);
 
 	const params = { ...DEFAULT_PARAMS, ...options?.params };
