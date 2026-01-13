@@ -40,7 +40,7 @@ export async function requireCsrfJson<T extends Obj>(request: Request): Promise<
 	if (!cookieToken) return { ok: false, code: 'csrf_missing' };
 
 	const provided = getStringField(parsed.body, 'csrf');
-	if (!provided || provided.length < 32) return { ok: false, code: 'csrf_missing' };
+	if (!provided || provided.length !== 32) return { ok: false, code: 'csrf_missing' };
 	if (provided !== cookieToken) return { ok: false, code: 'csrf_invalid' };
 
 	return parsed;

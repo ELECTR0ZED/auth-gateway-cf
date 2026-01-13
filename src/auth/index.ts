@@ -1,7 +1,7 @@
 import type { ProjectConfig, UserStore, SessionStrategy, Session, ProviderConfig } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
-import { normEmail } from '../utils/helpers';
+import { normEmail, validateEmail } from '../utils/helpers';
 import { safeReturnTo } from '../utils/returnTo';
 import { json } from '../utils/http';
 import { makeCsrfToken, csrfCookie, sameOrigin, requireCsrfJson } from '../utils/csrf';
@@ -210,7 +210,7 @@ export class AuthRouter {
 			headers: { Location: shortStateReturnTo || '/' },
 		});
 		const systemRoles = await this.store.getUserRoles(userId);
-		await this.applyIssuedCookies(response, { userId, email: identity.email, systemRoles });
+		await this.applyIssuedCookies(response, { userId, email, systemRoles });
 		return response;
 	}
 
@@ -296,6 +296,10 @@ export class AuthRouter {
 		}
 
 		const email = normEmail(emailRaw);
+		const isEmailValid = validateEmail(email);
+		if (!isEmailValid) {
+			return json({ error: 'invalid_email' }, { status: 400 });
+		}
 
 		const policy = getPasswordPolicy(this.cfg.passwordAuth?.policy);
 		const check = validatePassword(password, policy);
@@ -346,7 +350,7 @@ export class AuthRouter {
 		}
 
 		const email = normEmail(emailRaw);
-		const returnTo = url.searchParams.get('returnTo') || '/';
+		const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/', this.cfg.publicBaseUrl);
 
 		const row = await this.store.getUserIdByEmailForPassword(email);
 
@@ -367,9 +371,13 @@ export class AuthRouter {
 		}
 
 		// Rotate pepper/params on successful login
-		if (verify.usedPepperIndex !== 0 || needsRehash(row.passwordHash)) {
-			const newHash = await hashPassword(password, { pepper: peppers[0] });
-			await this.store.setPasswordHash(row.userId, newHash);
+		if (verify.usedPepperIndex > 0 || needsRehash(row.passwordHash)) {
+			try {
+				const newHash = await hashPassword(password, { pepper: peppers[0] });
+				await this.store.setPasswordHash(row.userId, newHash);
+			} catch (err) {
+				console.error('Failed to update password hash during login for user', row.userId, err);
+			}
 		}
 
 		const res = new Response(null, {

@@ -4,8 +4,8 @@ export function json(obj: unknown, init: ResponseInit = {}): Response {
 	return new Response(JSON.stringify(obj), {
 		...init,
 		headers: {
-			'content-type': 'application/json',
 			...(init.headers ? Object.fromEntries(new Headers(init.headers)) : {}),
+			'content-type': 'application/json',
 		},
 	});
 }
