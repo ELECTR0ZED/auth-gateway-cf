@@ -15,6 +15,7 @@ import {
 } from '../utils/passwords';
 import { AuthProvider } from '../providers/baseProvider';
 import { getPasswordPolicy, validatePassword } from '../utils/passwordPolicy';
+import { getTurnstileTokenField, verifyTurnstile } from '../utils/turnstile';
 
 export class AuthRouter {
 	constructor(
@@ -301,6 +302,9 @@ export class AuthRouter {
 		const parsed = await requireCsrfJson<Record<string, unknown>>(request);
 		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
 
+		const ts = await this.requireTurnstile(request, parsed.body);
+		if (!ts.ok) return json({ error: ts.code }, { status: 401 });
+
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
 
@@ -354,6 +358,9 @@ export class AuthRouter {
 
 		const parsed = await requireCsrfJson<{ email?: string; password?: string; csrf?: string }>(request);
 		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
+
+		const ts = await this.requireTurnstile(request, parsed.body);
+		if (!ts.ok) return json({ error: ts.code }, { status: 401 });
 
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
@@ -414,6 +421,9 @@ export class AuthRouter {
 		const parsed = await requireCsrfJson<{ currentPassword?: string; newPassword?: string; csrf?: string }>(request);
 		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
 
+		const ts = await this.requireTurnstile(request, parsed.body);
+		if (!ts.ok) return json({ error: ts.code }, { status: 401 });
+
 		const currentPassword = parsed.body.currentPassword;
 		const newPassword = parsed.body.newPassword;
 
@@ -473,5 +483,39 @@ export class AuthRouter {
 
 	private passwordSignupAllowed(): boolean {
 		return this.cfg.passwordAuth?.allowSignup === true;
+	}
+
+	private turnstileEnabled(): boolean {
+		return this.cfg.passwordAuth?.turnstile?.enabled === true;
+	}
+
+	private turnstileSecret(): string | null {
+		const key = this.cfg.passwordAuth?.turnstile?.secretEnv;
+		if (!key) return null;
+		const v = this.env[key];
+		return typeof v === 'string' && v.length > 0 ? v : null;
+	}
+
+	private turnstileTokenField(): string {
+		return getTurnstileTokenField(this.cfg.passwordAuth?.turnstile);
+	}
+
+	private async requireTurnstile(request: Request, body: Record<string, unknown>): Promise<{ ok: true } | { ok: false; code: string }> {
+		if (!this.turnstileEnabled()) return { ok: true };
+
+		const secret = this.turnstileSecret();
+		if (!secret) return { ok: false, code: 'turnstile_misconfigured' };
+
+		const field = this.turnstileTokenField();
+		const token = body[field];
+		if (typeof token !== 'string' || token.trim().length === 0) {
+			return { ok: false, code: 'turnstile_missing' };
+		}
+
+		const ip = request.headers.get('CF-Connecting-IP') ?? undefined; // optional
+		const result = await verifyTurnstile(token, secret, ip);
+
+		if (!result.ok) return { ok: false, code: result.code };
+		return { ok: true };
 	}
 }

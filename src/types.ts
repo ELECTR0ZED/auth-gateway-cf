@@ -130,6 +130,22 @@ export type PasswordPolicy = {
 	requireSymbol?: boolean;
 };
 
+export type TurnstileCfg = {
+	enabled: boolean;
+
+	/**
+	 * Env var that contains the Turnstile secret key.
+	 * (Configurable like your other secrets)
+	 */
+	secretEnv: string;
+
+	/**
+	 * JSON field name that carries the token.
+	 * Default: "turnstileToken"
+	 */
+	tokenField?: string;
+};
+
 export type PasswordAuthCfg = {
 	enabled: boolean;
 
@@ -143,6 +159,8 @@ export type PasswordAuthCfg = {
 
 	policy?: PasswordPolicy;
 	allowSignup?: boolean;
+
+	turnstile?: TurnstileCfg;
 };
 
 /* =========================================
