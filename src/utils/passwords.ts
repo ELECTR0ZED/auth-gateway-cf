@@ -97,7 +97,7 @@ export async function verifyPasswordWithPepperRotation(
 ): Promise<{ ok: true; usedPepperIndex: number } | { ok: false }> {
 	if (!peppers.length) {
 		const ok = await verifyPassword(password, stored, undefined);
-		return ok ? { ok: true, usedPepperIndex: 0 } : { ok: false };
+		return ok ? { ok: true, usedPepperIndex: -1 } : { ok: false };
 	}
 
 	for (let i = 0; i < peppers.length; i++) {

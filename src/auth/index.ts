@@ -292,11 +292,6 @@ export class AuthRouter {
 
 		const email = normEmail(emailRaw);
 
-		const account = await this.store.findUserIdByEmail(email);
-		if (account) {
-			return json({ error: 'account_exists' }, { status: 400 });
-		}
-
 		const policy = getPasswordPolicy(this.cfg.passwordAuth?.policy);
 		const check = validatePassword(password, policy);
 		if (!check.ok) {
@@ -305,12 +300,17 @@ export class AuthRouter {
 		}
 
 		const peppers = getPeppers(this.env, this.pepperEnvName());
-		const passwordHash = await hashPassword(password, { pepper: peppers[0] });
+		const primaryPepper = peppers[0];
+		const passwordHash = await hashPassword(password, primaryPepper ? { pepper: primaryPepper } : undefined);
 
 		let userId: string;
 		try {
 			userId = await this.store.createUserWithPassword(email, passwordHash);
-		} catch (_: unknown) {
+		} catch (err: unknown) {
+			if (err === 'account_exists' || (err instanceof Error && 'code' in err && err.code === 'account_exists')) {
+				return json({ error: 'account_exists' }, { status: 400 });
+			}
+
 			return json({ error: 'signup_failed' }, { status: 500 });
 		}
 
@@ -356,7 +356,7 @@ export class AuthRouter {
 		const storedHash = row.passwordHash;
 		const verify = await verifyPasswordWithPepperRotation(password, storedHash, peppers);
 
-		if (!row || !verify.ok) {
+		if (!verify.ok) {
 			return json({ error: 'invalid_credentials' }, { status: 401 });
 		}
 
