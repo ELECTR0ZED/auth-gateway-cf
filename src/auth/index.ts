@@ -40,32 +40,45 @@ export class AuthRouter {
 			return new Response('Not Found', { status: 404 });
 		}
 
+		// Preliminary checks
 		switch (url.pathname) {
 			case '/auth/login':
 			case '/auth/signin':
 			case '/auth/link':
-				if (!this.oauthEnabled()) return new Response('Not Found', { status: 404 });
-				return this.loginOrLink(request, url);
 			case '/auth/callback':
 				if (!this.oauthEnabled()) return new Response('Not Found', { status: 404 });
+				break;
+			case '/auth/csrf':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				break;
+			case '/auth/password/signup':
+			case '/auth/password/register':
+			case '/auth/password/login':
+			case '/auth/password/signin':
+			case '/auth/password/change':
+				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
+				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
+				break;
+		}
+
+		switch (url.pathname) {
+			case '/auth/login':
+			case '/auth/signin':
+			case '/auth/link':
+				return this.loginOrLink(request, url);
+			case '/auth/callback':
 				return this.callback(request, url);
 			case '/auth/logout':
 				return this.logout();
 			case '/auth/csrf':
-				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
 				return this.csrf();
 			case '/auth/password/signup':
 			case '/auth/password/register':
-				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
-				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 				return this.passwordRegister(request, url);
 			case '/auth/password/login':
-				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
-				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
+			case '/auth/password/signin':
 				return this.passwordLogin(request, url);
 			case '/auth/password/change':
-				if (!this.passwordEnabled()) return new Response('Not Found', { status: 404 });
-				if (request.method !== 'POST') return new Response('Method Not Allowed', { status: 405, headers: { Allow: 'POST' } });
 				return this.passwordChange(request);
 			default:
 				return new Response('Not Found', { status: 404 });
@@ -265,7 +278,7 @@ export class AuthRouter {
 		}
 		return new Response(null, {
 			status: 302,
-			headers: { Location: `/${'?auth_error=' + code}` },
+			headers: { Location: `/?auth_error=${code}` },
 		});
 	}
 
@@ -291,7 +304,7 @@ export class AuthRouter {
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
 
-		if (typeof emailRaw !== 'string' || typeof password !== 'string') {
+		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length === 0) {
 			return json({ error: 'invalid_request' }, { status: 400 });
 		}
 
@@ -355,10 +368,10 @@ export class AuthRouter {
 		const row = await this.store.getUserIdByEmailForPassword(email);
 
 		const peppers = getPeppers(this.env, this.pepperEnvName());
+		const primaryPepper = peppers[0];
 
 		// Reduce timing differences: always verify against some hash
 		if (!row) {
-			const primaryPepper = peppers[0];
 			await verifyPassword(password, getFakeStoredHash(), primaryPepper);
 			return json({ error: 'invalid_credentials' }, { status: 401 });
 		}
@@ -373,7 +386,7 @@ export class AuthRouter {
 		// Rotate pepper/params on successful login
 		if (verify.usedPepperIndex > 0 || needsRehash(row.passwordHash)) {
 			try {
-				const newHash = await hashPassword(password, { pepper: peppers[0] });
+				const newHash = await hashPassword(password, primaryPepper ? { pepper: primaryPepper } : undefined);
 				await this.store.setPasswordHash(row.userId, newHash);
 			} catch (err) {
 				console.error('Failed to update password hash during login for user', row.userId, err);

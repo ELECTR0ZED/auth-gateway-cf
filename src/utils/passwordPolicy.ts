@@ -29,7 +29,7 @@ export function validatePassword(password: string, policy: PasswordPolicy): { ok
 		return { ok: false, reason: 'missing_number' };
 	}
 
-	if (policy.requireSymbol && !/[^A-Za-z0-9]/.test(password)) {
+	if (policy.requireSymbol && !/[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password)) {
 		return { ok: false, reason: 'missing_symbol' };
 	}
 

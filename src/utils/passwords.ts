@@ -11,7 +11,7 @@ type StoredHash = {
 
 const DEFAULT_PARAMS = {
 	hash: 'SHA-256' as const,
-	iter: 600_000,
+	iter: 800_000,
 	dkLen: 32,
 };
 
