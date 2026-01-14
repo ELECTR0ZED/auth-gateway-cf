@@ -113,7 +113,7 @@ export class AuthRouter {
 
 		if (mode === 'link' && !session) {
 			const rt = encodeURIComponent(returnTo ?? '/');
-			return Response.redirect(`${this.cfg.publicBaseUrl}/auth/login?returnTo=${rt}`, 302);
+			return Response.redirect(`${this.getUnauthenticatedRedirectUrl()}?returnTo=${rt}`, 302);
 		}
 
 		const { state, codeChallenge, verifier } = await makePkceState();
@@ -252,8 +252,8 @@ export class AuthRouter {
 	 * @returns {{ impl: any; cfg: any; }}
 	 */
 	private pickProvider(explicit?: string) {
-		const providers = this.cfg.providers ?? [];
-		const id = explicit || this.cfg.defaultProvider || providers.find((p) => p.enabled)?.id;
+		const providers = this.cfg.oAuth.providers ?? [];
+		const id = explicit || this.cfg.oAuth.defaultProvider || providers.find((p) => p.enabled)?.id;
 
 		const cfg = providers.find((p) => p.id === id && p.enabled);
 		if (!cfg) throw new Error('No provider available');
@@ -517,5 +517,9 @@ export class AuthRouter {
 
 		if (!result.ok) return { ok: false, code: result.code };
 		return { ok: true };
+	}
+
+	getUnauthenticatedRedirectUrl(): string {
+		return this.cfg.customUnauthenticatedRedirectUrl || '/auth/login';
 	}
 }

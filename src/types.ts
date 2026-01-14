@@ -120,6 +120,8 @@ export interface SessionStrategy {
 
 export type OAuthCfg = {
 	enabled: boolean;
+	providers?: ProviderConfig[];
+	defaultProvider?: LoginProviderId;
 };
 
 export type PasswordPolicy = {
@@ -183,13 +185,12 @@ export type ProjectConfig = {
 	projectName: string;
 	publicBaseUrl: string;
 	routes: RouteRule[];
-	providers?: ProviderConfig[];
-	defaultProvider?: LoginProviderId;
 	session: SessionStrategyCfg;
 	propagation: PropagationCfg;
 	userStore: UserStoreCfg;
-	oAuth?: OAuthCfg;
-	passwordAuth?: PasswordAuthCfg;
+	oAuth: OAuthCfg;
+	passwordAuth: PasswordAuthCfg;
+	customUnauthenticatedRedirectUrl?: string;
 };
 
 /* =========================================

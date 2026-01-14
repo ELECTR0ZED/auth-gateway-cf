@@ -40,7 +40,7 @@ export class Gateway {
 		if (rule.auth === 'required') {
 			if (!session) {
 				const returnTo = encodeURIComponent(url.pathname + url.search);
-				return Response.redirect(`${this.cfg.publicBaseUrl}/auth/login?returnTo=${returnTo}`, 302);
+				return Response.redirect(`${this.auth.getUnauthenticatedRedirectUrl()}?returnTo=${returnTo}`, 302);
 			}
 
 			if (rule.requireRolesAll && !hasAllRoles(session.systemRoles, rule.requireRolesAll)) {
