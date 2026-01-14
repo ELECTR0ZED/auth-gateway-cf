@@ -112,7 +112,7 @@ export class AuthRouter {
 		const { session } = await this.strat.resolve(request, this.env);
 
 		if (mode === 'link' && !session) {
-			return Response.redirect(`${this.createUnauthenticatedRedirect(request.url, returnTo)}`, 302);
+			return this.createUnauthenticatedRedirect(request.url, returnTo);
 		}
 
 		const { state, codeChallenge, verifier } = await makePkceState();
