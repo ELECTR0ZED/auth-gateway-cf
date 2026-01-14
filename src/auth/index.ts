@@ -112,8 +112,7 @@ export class AuthRouter {
 		const { session } = await this.strat.resolve(request, this.env);
 
 		if (mode === 'link' && !session) {
-			const rt = encodeURIComponent(returnTo ?? '/');
-			return Response.redirect(`${this.getUnauthenticatedRedirectUrl()}?returnTo=${rt}`, 302);
+			return Response.redirect(`${this.createUnauthenticatedRedirect(request.url, returnTo)}`, 302);
 		}
 
 		const { state, codeChallenge, verifier } = await makePkceState();
@@ -469,7 +468,7 @@ export class AuthRouter {
 		return this.cfg.passwordAuth?.enabled === true;
 	}
 
-	private authFeatureEnabled(): boolean {
+	authFeatureEnabled(): boolean {
 		return this.oauthEnabled() || this.passwordEnabled();
 	}
 
@@ -521,5 +520,15 @@ export class AuthRouter {
 
 	getUnauthenticatedRedirectUrl(): string {
 		return this.cfg.customUnauthenticatedRedirectUrl || '/auth/login';
+	}
+
+	createUnauthenticatedRedirect(url: string, returnTo?: string): Response {
+		const baseUrl = new URL(url);
+		let returnToParam: string = '';
+		if (returnTo) {
+			returnToParam = `?returnTo=${encodeURIComponent(returnTo)}`;
+		}
+
+		return Response.redirect(new URL(this.getUnauthenticatedRedirectUrl(), baseUrl).toString() + returnToParam, 302);
 	}
 }
