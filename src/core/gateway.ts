@@ -45,7 +45,7 @@ export class Gateway {
 			if (!session) {
 				const rawReturnTo = url.searchParams.get('returnTo') ?? undefined;
 				const returnTo = safeReturnTo(rawReturnTo, this.cfg.publicBaseUrl);
-				return Response.redirect(`${this.auth.createUnauthenticatedRedirectUrl(request.url, returnTo)}`, 302);
+				return Response.redirect(`${this.auth.createUnauthenticatedRedirect(request.url, returnTo)}`, 302);
 			}
 
 			if (rule.requireRolesAll && !hasAllRoles(session.systemRoles, rule.requireRolesAll)) {
