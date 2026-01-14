@@ -3,17 +3,18 @@ import { defineConfig } from '.';
 defineConfig({
 	projectName: 'demo-project',
 	publicBaseUrl: 'http://domain.com',
-	providers: [
-		{
-			id: 'google',
-			enabled: true,
-			label: 'Google',
-			clientId: 'clientId',
-			clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
-		},
-	],
 	oAuth: {
 		enabled: true,
+		defaultProvider: 'google',
+		providers: [
+			{
+				id: 'google',
+				enabled: true,
+				label: 'Google',
+				clientId: 'clientId',
+				clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
+			},
+		],
 	},
 	passwordAuth: {
 		enabled: true,
@@ -24,7 +25,6 @@ defineConfig({
 			tokenField: 'turnstileToken',
 		},
 	},
-	defaultProvider: 'google',
 	session: {
 		kind: 'durableObject',
 		cookieName: '__Host-sid',
