@@ -5,6 +5,7 @@ import { attachSignedUser, stripUser } from '../utils/propagation';
 import { AuthRouter } from '../auth';
 import { makeUserStore } from '../stores';
 import { hasAllRoles, hasAnyRole } from '../utils/roles';
+import { safeReturnTo } from '../utils/returnTo';
 
 export class Gateway {
 	private auth: AuthRouter;
@@ -38,9 +39,13 @@ export class Gateway {
 
 		// Enforce auth if route requires it
 		if (rule.auth === 'required') {
+			if (!this.auth.authFeatureEnabled()) {
+				return new Response('Authentication is disabled', { status: 501 });
+			}
 			if (!session) {
-				const returnTo = encodeURIComponent(url.pathname + url.search);
-				return Response.redirect(`${this.auth.getUnauthenticatedRedirectUrl()}?returnTo=${returnTo}`, 302);
+				const rawReturnTo = url.searchParams.get('returnTo') ?? undefined;
+				const returnTo = safeReturnTo(rawReturnTo, this.cfg.publicBaseUrl);
+				return Response.redirect(`${this.auth.createUnauthenticatedRedirectUrl(request.url, returnTo)}`, 302);
 			}
 
 			if (rule.requireRolesAll && !hasAllRoles(session.systemRoles, rule.requireRolesAll)) {
