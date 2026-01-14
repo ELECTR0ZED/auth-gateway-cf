@@ -43,8 +43,7 @@ export class Gateway {
 				return new Response('Authentication is disabled', { status: 501 });
 			}
 			if (!session) {
-				const rawReturnTo = url.searchParams.get('returnTo') ?? undefined;
-				const returnTo = safeReturnTo(rawReturnTo, this.cfg.publicBaseUrl);
+				const returnTo = safeReturnTo(request.url, this.cfg.publicBaseUrl);
 				return this.auth.createUnauthenticatedRedirect(request.url, returnTo);
 			}
 
