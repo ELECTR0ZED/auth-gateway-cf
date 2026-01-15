@@ -10,6 +10,7 @@ export type RouteRule = {
 	auth: 'required' | 'none';
 	requireRolesAny?: string[];
 	requireRolesAll?: string[];
+	bypassAuthForStaticAssets?: boolean;
 	service: Fetcher;
 };
 
@@ -166,6 +167,14 @@ export type PasswordAuthCfg = {
 };
 
 /* =========================================
+ * Overrides
+ * =======================================*/
+
+export type ConfigOverrides = {
+	staticAssetRegex?: RegExp;
+};
+
+/* =========================================
  * Propagation / Project Config
  * =======================================*/
 
@@ -191,6 +200,7 @@ export type ProjectConfig = {
 	oAuth: OAuthCfg;
 	passwordAuth: PasswordAuthCfg;
 	customUnauthenticatedRedirectUrl?: string;
+	overrides?: ConfigOverrides;
 };
 
 /* =========================================

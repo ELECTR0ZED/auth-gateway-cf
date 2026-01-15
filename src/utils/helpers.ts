@@ -6,3 +6,5 @@ export const normEmail = (e: string) => e.trim().toLowerCase();
 export const validateEmail = (email: string): boolean => {
 	return emailRegex.test(email);
 };
+
+export const STATIC_ASSET_RE = /\.(?:css|js|mjs|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|otf)$/i;

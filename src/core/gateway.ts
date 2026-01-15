@@ -6,6 +6,7 @@ import { AuthRouter } from '../auth';
 import { makeUserStore } from '../stores';
 import { hasAllRoles, hasAnyRole } from '../utils/roles';
 import { safeReturnTo } from '../utils/returnTo';
+import { STATIC_ASSET_RE } from '../utils/helpers';
 
 export class Gateway {
 	private auth: AuthRouter;
@@ -37,8 +38,13 @@ export class Gateway {
 		// Check for existing session
 		const { session, accessJwt } = await this.strat.resolve(request, this.env);
 
+		// Common static asset extensions (tight allow-list)
+		const staticAssetRegex = this.cfg.overrides?.staticAssetRegex || STATIC_ASSET_RE;
+
+		const isStaticAsset = staticAssetRegex.test(url.pathname);
+
 		// Enforce auth if route requires it
-		if (rule.auth === 'required') {
+		if (rule.auth === 'required' && !(isStaticAsset && rule.bypassAuthForStaticAssets)) {
 			if (!this.auth.authFeatureEnabled()) {
 				return new Response('Authentication is disabled', { status: 501 });
 			}
