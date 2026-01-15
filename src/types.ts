@@ -10,6 +10,7 @@ export type RouteRule = {
 	auth: 'required' | 'none';
 	requireRolesAny?: string[];
 	requireRolesAll?: string[];
+	bypassAuthForStaticAssets?: boolean;
 	service: Fetcher;
 };
 

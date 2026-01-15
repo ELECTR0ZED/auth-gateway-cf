@@ -44,7 +44,7 @@ export class Gateway {
 		const isStaticAsset = staticAssetRegex.test(url.pathname);
 
 		// Enforce auth if route requires it
-		if (rule.auth === 'required' && !isStaticAsset) {
+		if (rule.auth === 'required' && !(isStaticAsset && rule.bypassAuthForStaticAssets)) {
 			if (!this.auth.authFeatureEnabled()) {
 				return new Response('Authentication is disabled', { status: 501 });
 			}
