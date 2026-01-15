@@ -68,15 +68,34 @@ export class Gateway {
 			return new Response(`Bad route: service binding not available`, { status: 502 });
 		}
 
-		// Forward the request to the internal service
-		const fwdReq = new Request(new URL(url.pathname + url.search, 'http://internal'), {
-			method: request.method,
-			headers,
-			body: request.body,
+		const upstreamUrl = new URL(url.pathname + url.search, 'http://internal');
+
+		const method = request.method.toUpperCase();
+		const canHaveBody = method !== 'GET' && method !== 'HEAD';
+
+		// Clone headers
+		const fwdHeaders = new Headers(headers);
+
+		// Defensive: strip body-related headers for methods that cannot have a body
+		if (!canHaveBody) {
+			fwdHeaders.delete('content-length');
+			fwdHeaders.delete('transfer-encoding');
+			fwdHeaders.delete('content-type');
+		}
+
+		const init: RequestInit & { duplex?: 'half' } = {
+			method,
+			headers: fwdHeaders,
 			redirect: 'manual',
-			// @ts-expect-error – Workers streaming bodies
-			duplex: 'half',
-		});
+		};
+
+		// Only attach body (and duplex) for methods that can have one
+		if (canHaveBody) {
+			init.body = request.body;
+			init.duplex = 'half';
+		}
+
+		const fwdReq = new Request(upstreamUrl, init);
 		return target.fetch(fwdReq);
 	}
 }
