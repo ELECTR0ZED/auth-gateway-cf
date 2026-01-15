@@ -112,7 +112,7 @@ export class AuthRouter {
 		const { session } = await this.strat.resolve(request, this.env);
 
 		if (mode === 'link' && !session) {
-			return this.createUnauthenticatedRedirect(request.url);
+			return this.redirectError('link_requires_login', returnTo);
 		}
 
 		const { state, codeChallenge, verifier } = await makePkceState();
@@ -518,17 +518,20 @@ export class AuthRouter {
 		return { ok: true };
 	}
 
-	getUnauthenticatedRedirectUrl(): string {
-		return this.cfg.customUnauthenticatedRedirectUrl || '/auth/login';
+	getGlobalUnauthenticatedRedirectUrl(): string {
+		return this.cfg.overrides?.globalUnauthenticatedRedirectUrl || '/auth/login';
 	}
 
-	createUnauthenticatedRedirect(url: string, returnTo?: string): Response {
+	createUnauthenticatedRedirect(url: string, returnTo?: string, customRedirectUrl?: string): Response {
 		const baseUrl = new URL(url);
 		let returnToParam: string = '';
 		if (returnTo) {
 			returnToParam = `?returnTo=${encodeURIComponent(returnTo)}`;
 		}
 
-		return Response.redirect(new URL(this.getUnauthenticatedRedirectUrl(), baseUrl).toString() + returnToParam, 302);
+		return Response.redirect(
+			new URL(customRedirectUrl || this.getGlobalUnauthenticatedRedirectUrl(), baseUrl).toString() + returnToParam,
+			302,
+		);
 	}
 }
