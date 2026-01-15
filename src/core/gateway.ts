@@ -73,10 +73,10 @@ export class Gateway {
 		const method = request.method.toUpperCase();
 		const canHaveBody = method !== 'GET' && method !== 'HEAD';
 
-		// Clone/normalize headers (ensure this is a Headers instance)
-		const fwdHeaders = headers instanceof Headers ? new Headers(headers) : new Headers(headers);
+		// Clone headers
+		const fwdHeaders = new Headers(headers);
 
-		// Defensive: strip body-related headers if we’re forcing no-body
+		// Defensive: strip body-related headers for methods that cannot have a body
 		if (!canHaveBody) {
 			fwdHeaders.delete('content-length');
 			fwdHeaders.delete('transfer-encoding');
