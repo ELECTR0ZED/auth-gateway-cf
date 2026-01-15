@@ -61,4 +61,7 @@ defineConfig({
 			service: {} as Service,
 		},
 	],
+	overrides: {
+		globalUnauthenticatedRedirectUrl: '/custom-login',
+	},
 });
