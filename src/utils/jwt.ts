@@ -53,6 +53,10 @@ function b64urlDecodeUtf8(u: string): string {
  * @returns {Promise<string>}
  */
 export async function signJwtHS256(payload: Record<string, string | number>, secret: string): Promise<string> {
+	if (!secret) {
+		throw new Error('Missing JWT Secret');
+	}
+
 	const header = b64urlEncodeUtf8(JSON.stringify({ alg: 'HS256', typ: 'JWT' }));
 	const body = b64urlEncodeUtf8(JSON.stringify(payload));
 
@@ -74,6 +78,10 @@ export async function signJwtHS256(payload: Record<string, string | number>, sec
  * @returns {Promise<Record<string, string | number>>}
  */
 export async function verifyJwtHS256(token: string, secret: string): Promise<Record<string, string | number>> {
+	if (!secret) {
+		throw new Error('Missing JWT Secret');
+	}
+
 	const [h, p, s] = token.split('.');
 	if (!h || !p || !s) {
 		throw new Error('bad jwt');

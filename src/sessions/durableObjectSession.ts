@@ -25,9 +25,6 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 		const data = (await res.json().catch(() => null)) as { session?: Session | null } | null;
 		if (!data?.session) return { session: null };
 
-		const jwtSecret = env[this.cfg.jwtSecretEnv];
-		if (!jwtSecret) throw new Error('Missing JWT secret');
-
 		const now = Math.floor(Date.now() / 1000);
 		const exp = now + 15 * 60;
 		const accessJwt = await signJwtHS256(
@@ -41,7 +38,7 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 				exp,
 				jti: crypto.randomUUID(),
 			},
-			jwtSecret,
+			env[this.cfg.jwtSecretEnv]!,
 		);
 
 		return { session: data.session as Session, accessJwt };
@@ -61,9 +58,6 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 		});
 		if (!res.ok) throw new Error('session create failed');
 
-		const jwtSecret = env[this.cfg.jwtSecretEnv];
-		if (!jwtSecret) throw new Error('Missing JWT secret');
-
 		const now = Math.floor(Date.now() / 1000);
 		const exp = now + 15 * 60;
 		const accessJwt = await signJwtHS256(
@@ -77,7 +71,7 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 				exp,
 				jti: crypto.randomUUID(),
 			},
-			jwtSecret,
+			env[this.cfg.jwtSecretEnv]!,
 		);
 
 		const cookieName = this.cfg.cookieName ?? '__Host-sid';

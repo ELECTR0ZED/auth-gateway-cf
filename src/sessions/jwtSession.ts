@@ -24,9 +24,6 @@ export class JwtSessionStrategy implements SessionStrategy {
 	}
 
 	async issue(session: Session, env: Env) {
-		const jwtSecret = env[this.cfg.jwtSecretEnv];
-		if (!jwtSecret) throw new Error('Missing JWT secret');
-
 		const expMinutes = this.cfg.expMinutes ?? 15;
 		const now = Math.floor(Date.now() / 1000);
 		const jwt = await signJwtHS256(
@@ -38,7 +35,7 @@ export class JwtSessionStrategy implements SessionStrategy {
 				exp: now + expMinutes * 60,
 				jti: crypto.randomUUID(),
 			},
-			jwtSecret,
+			env[this.cfg.jwtSecretEnv]!,
 		);
 		return {
 			cookie: `${this.cfg.cookieName ?? '__Host-session'}=${jwt}; Path=/; HttpOnly; Secure; SameSite=Lax`,
