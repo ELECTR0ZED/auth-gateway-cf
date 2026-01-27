@@ -194,6 +194,13 @@ export type ConfigOverrides = {
 		| { enabled: false; requiredForLogin?: false };
 
 	autoLoginAfterSignup: boolean;
+	captureUsername:
+		| {
+				enabled: true;
+				missingUsernameMethod: 'generate' | 'reject' | 'ignore';
+				minLength?: number;
+		  }
+		| { enabled: false };
 };
 
 /* =========================================

@@ -72,5 +72,9 @@ defineConfig({
 			requiredForLogin: true,
 		},
 		autoLoginAfterSignup: true,
+		captureUsername: {
+			enabled: true,
+			missingUsernameMethod: 'generate',
+		},
 	},
 });

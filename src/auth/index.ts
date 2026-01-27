@@ -184,12 +184,29 @@ export class AuthRouter {
 				return this.redirectError(code, shortStateReturnTo);
 			}
 
+			// Auto-login after signup if enabled and no further steps required (like email verification or account approval)
+			if (
+				!this.cfg.overrides?.autoLoginAfterSignup ||
+				this.cfg.overrides?.accountApproval?.enabled ||
+				(this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin)
+			) {
+				// TODO
+				return json(
+					{
+						success: true,
+						requiresEmailVerification:
+							this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin,
+						requiresAccountApproval: this.cfg.overrides?.accountApproval?.enabled,
+					},
+					{ status: 200 },
+				);
+			}
+
 			const response = new Response(null, {
 				status: 302,
 				headers: { Location: shortStateReturnTo || '/' },
 			});
-			const systemRoles = await this.store.getUserRoles(userId);
-			await this.applyIssuedCookies(response, { userId, email, systemRoles });
+			await this.applyIssuedCookies(response, { userId, email, systemRoles: [] });
 			return response;
 		}
 
@@ -309,6 +326,18 @@ export class AuthRouter {
 
 		const ts = await this.requireTurnstile(request, parsed.body);
 		if (!ts.ok) return json({ error: ts.code }, { status: 401 });
+
+		let username: unknown | null;
+		if (this.cfg.overrides?.captureUsername?.enabled) {
+			username = parsed.body.username;
+			if (typeof username !== 'string' || username.trim().length === 0) {
+				if (this.cfg.overrides.captureUsername.missingUsernameMethod === 'reject') {
+					return json({ error: 'username_required' }, { status: 400 });
+				} else {
+					username = null;
+				}
+			}
+		}
 
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
@@ -498,7 +527,7 @@ export class AuthRouter {
 			}
 		}
 
-		// Check if email verification is required and user is unverified then reject login as long as its not required
+		// Reject login when email verification is enabled, required for login, and the user's email is unverified
 		if (this.cfg.overrides?.emailVerification.enabled) {
 			if (userStates?.is_email_verified === false && this.cfg.overrides.emailVerification.requiredForLogin) {
 				return { success: false, reason: 'email_unverified' };

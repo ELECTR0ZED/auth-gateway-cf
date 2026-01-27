@@ -7,9 +7,11 @@ import { Kysely, PostgresDialect, Transaction, type Generated } from 'kysely';
 export interface DB {
 	users: {
 		id: Generated<string>; // uuid DEFAULT uuid_generate_v4()
+		username: string | null; // unique, nullable
 		email: string; // unique
 		system_roles: Generated<string[]>; // text[]
 		created_at: Generated<Date>; // DEFAULT now()
+		last_login_at: Date | null;
 	};
 	user_states: {
 		user_id: string;
