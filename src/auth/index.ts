@@ -163,6 +163,42 @@ export class AuthRouter {
 			return this.redirectError('email_required', shortStateReturnTo);
 		}
 
+		const byIdentity = await this.store.findUserIdByIdentity(identity.issuer, identity.subject);
+
+		// Sign-up flow
+		if (!byIdentity) {
+			const byEmail = await this.store.findUserIdByEmail(email);
+			if (byEmail) {
+				return this.redirectError('account_exists', shortStateReturnTo);
+			}
+
+			let userId: string;
+			try {
+				userId = await this.store.createUserWithIdentity(email, {
+					provider: identity.provider,
+					issuer: identity.issuer,
+					subject: identity.subject,
+				});
+			} catch (e: unknown) {
+				const code = (e as Error)?.message === 'account_exists' ? 'account_exists' : 'signup_failed';
+				return this.redirectError(code, shortStateReturnTo);
+			}
+
+			const response = new Response(null, {
+				status: 302,
+				headers: { Location: shortStateReturnTo || '/' },
+			});
+			const systemRoles = await this.store.getUserRoles(userId);
+			await this.applyIssuedCookies(response, { userId, email, systemRoles });
+			return response;
+		}
+
+		const checkStates = await this.checkUserStates(byIdentity);
+		if (!checkStates.success) {
+			return json({ error: checkStates.reason }, { status: 403 });
+		}
+
+		// Link flow
 		if (info.mode === 'link') {
 			if (!activeSession) {
 				return this.redirectError('link_requires_login', shortStateReturnTo);
@@ -183,47 +219,16 @@ export class AuthRouter {
 			});
 		}
 
-		// login / signup
-		const byIdentity = await this.store.findUserIdByIdentity(identity.issuer, identity.subject);
-		if (byIdentity) {
-			const response = new Response(null, {
-				status: 302,
-				headers: { Location: shortStateReturnTo || '/' },
-			});
-			const systemRoles = await this.store.getUserRoles(byIdentity);
-			const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
-			if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
-			if (issued?.accessJwt)
-				response.headers.append(
-					'Set-Cookie',
-					`__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`,
-				);
-			return response;
-		}
-
-		const byEmail = await this.store.findUserIdByEmail(email);
-		if (byEmail) {
-			return this.redirectError('account_exists', shortStateReturnTo);
-		}
-
-		let userId: string;
-		try {
-			userId = await this.store.createUserWithIdentity(email, {
-				provider: identity.provider,
-				issuer: identity.issuer,
-				subject: identity.subject,
-			});
-		} catch (e: unknown) {
-			const code = (e as Error)?.message === 'account_exists' ? 'account_exists' : 'signup_failed';
-			return this.redirectError(code, shortStateReturnTo);
-		}
-
+		// Login flow
 		const response = new Response(null, {
 			status: 302,
 			headers: { Location: shortStateReturnTo || '/' },
 		});
-		const systemRoles = await this.store.getUserRoles(userId);
-		await this.applyIssuedCookies(response, { userId, email, systemRoles });
+		const systemRoles = await this.store.getUserRoles(byIdentity);
+		const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
+		if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
+		if (issued?.accessJwt)
+			response.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);
 		return response;
 	}
 
@@ -251,6 +256,7 @@ export class AuthRouter {
 	 * @returns {{ impl: any; cfg: any; }}
 	 */
 	private pickProvider(explicit?: string) {
+		if (!this.cfg.oAuth.enabled) throw new Error('OAuth is disabled');
 		const providers = this.cfg.oAuth.providers ?? [];
 		const id = explicit || this.cfg.oAuth.defaultProvider || providers.find((p) => p.enabled)?.id;
 
@@ -290,7 +296,7 @@ export class AuthRouter {
 	}
 
 	private async passwordRegister(request: Request, url: URL): Promise<Response> {
-		if (!this.passwordSignupAllowed()) {
+		if (!this.cfg.passwordAuth.enabled) {
 			return new Response('Not Found', { status: 404 });
 		}
 
@@ -332,11 +338,29 @@ export class AuthRouter {
 		try {
 			userId = await this.store.createUserWithPassword(email, passwordHash);
 		} catch (err: unknown) {
-			if (err === 'account_exists' || (err instanceof Error && 'code' in err && err.code === 'account_exists')) {
+			const errorMessage = (err as Error).message;
+			if (errorMessage === 'account_exists') {
 				return json({ error: 'account_exists' }, { status: 400 });
 			}
 
 			return json({ error: 'signup_failed' }, { status: 500 });
+		}
+
+		// Auto-login after signup if enabled and no further steps required (like email verification or account approval)
+		if (
+			!this.cfg.overrides?.autoLoginAfterSignup ||
+			this.cfg.overrides?.accountApproval?.enabled ||
+			(this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin)
+		) {
+			return json(
+				{
+					success: true,
+					requiresEmailVerification:
+						this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin,
+					requiresAccountApproval: this.cfg.overrides?.accountApproval?.enabled,
+				},
+				{ status: 200 },
+			);
 		}
 
 		const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/', this.cfg.publicBaseUrl);
@@ -399,6 +423,11 @@ export class AuthRouter {
 			}
 		}
 
+		const checkStates = await this.checkUserStates(row.userId);
+		if (!checkStates.success) {
+			return json({ error: checkStates.reason }, { status: 403 });
+		}
+
 		const res = new Response(null, {
 			status: 302,
 			headers: { Location: returnTo || '/' },
@@ -452,6 +481,33 @@ export class AuthRouter {
 		return res;
 	}
 
+	async checkUserStates(
+		userId: string,
+	): Promise<{ success: true } | { success: false; reason: 'account_disabled' | 'account_unapproved' | 'email_unverified' }> {
+		const userStates = await this.store.getUserStates(userId);
+
+		// Reject disabled accounts always
+		if (userStates?.is_disabled) {
+			return { success: false, reason: 'account_disabled' };
+		}
+
+		// Check if approval is enabled and user is unapproved then reject login
+		if (this.cfg.overrides?.accountApproval.enabled) {
+			if (userStates?.is_approved === false) {
+				return { success: false, reason: 'account_unapproved' };
+			}
+		}
+
+		// Check if email verification is required and user is unverified then reject login as long as its not required
+		if (this.cfg.overrides?.emailVerification.enabled) {
+			if (userStates?.is_email_verified === false && this.cfg.overrides.emailVerification.requiredForLogin) {
+				return { success: false, reason: 'email_unverified' };
+			}
+		}
+
+		return { success: true };
+	}
+
 	private async applyIssuedCookies(res: Response, session: Session) {
 		const issued = await this.strat.issue?.(session, this.env);
 		if (issued?.cookie) res.headers.append('Set-Cookie', issued.cookie);
@@ -473,22 +529,23 @@ export class AuthRouter {
 	}
 
 	private pepperEnvName(): string {
+		if (!this.cfg.passwordAuth?.enabled) return 'PASSWORD_PEPPERS';
 		return this.cfg.passwordAuth?.pepperEnv ?? 'PASSWORD_PEPPERS';
 	}
 
 	private passwordPolicy() {
+		if (!this.cfg.passwordAuth?.enabled) return getPasswordPolicy();
 		return getPasswordPolicy(this.cfg.passwordAuth?.policy);
 	}
 
-	private passwordSignupAllowed(): boolean {
-		return this.cfg.passwordAuth?.allowSignup === true;
-	}
-
 	private turnstileEnabled(): boolean {
+		if (!this.cfg.passwordAuth?.enabled) return false;
 		return this.cfg.passwordAuth?.turnstile?.enabled === true;
 	}
 
 	private turnstileSecret(): string | null {
+		if (!this.cfg.passwordAuth?.enabled) return null;
+		if (!this.cfg.passwordAuth?.turnstile?.enabled) return null;
 		const key = this.cfg.passwordAuth?.turnstile?.secretEnv;
 		if (!key) return null;
 		const v = this.env[key];
@@ -496,6 +553,8 @@ export class AuthRouter {
 	}
 
 	private turnstileTokenField(): string {
+		if (!this.cfg.passwordAuth?.enabled) return 'turnstileToken';
+		if (!this.cfg.passwordAuth?.turnstile?.enabled) return 'turnstileToken';
 		return getTurnstileTokenField(this.cfg.passwordAuth?.turnstile);
 	}
 

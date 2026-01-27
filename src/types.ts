@@ -2,6 +2,8 @@
  * Routing / Gateway
  * =======================================*/
 
+import { DB } from './stores/postgres';
+
 export type Match = { path: string | RegExp; methods?: string[] };
 
 export type RouteRule = {
@@ -120,11 +122,13 @@ export interface SessionStrategy {
  * Auth Config
  * =======================================*/
 
-export type OAuthCfg = {
-	enabled: boolean;
-	providers?: ProviderConfig[];
-	defaultProvider?: LoginProviderId;
-};
+export type OAuthCfg =
+	| {
+			enabled: true;
+			providers: ProviderConfig[];
+			defaultProvider: LoginProviderId;
+	  }
+	| { enabled: false };
 
 export type PasswordPolicy = {
 	minLength: number;
@@ -134,38 +138,42 @@ export type PasswordPolicy = {
 	requireSymbol?: boolean;
 };
 
-export type TurnstileCfg = {
-	enabled: boolean;
+export type TurnstileCfg =
+	| {
+			enabled: true;
 
-	/**
-	 * Env var that contains the Turnstile secret key.
-	 * (Configurable like your other secrets)
-	 */
-	secretEnv: string;
+			/**
+			 * Env var that contains the Turnstile secret key.
+			 * (Configurable like your other secrets)
+			 */
+			secretEnv: string;
 
-	/**
-	 * JSON field name that carries the token.
-	 * Default: "turnstileToken"
-	 */
-	tokenField?: string;
-};
+			/**
+			 * JSON field name that carries the token.
+			 * Default: "turnstileToken"
+			 */
+			tokenField?: string;
+	  }
+	| { enabled: false };
 
-export type PasswordAuthCfg = {
-	enabled: boolean;
+export type PasswordAuthCfg =
+	| {
+			enabled: true;
 
-	/**
-	 * Env var that contains comma-separated peppers (newest first).
-	 * Example value: "pepper_v2,pepper_v1"
-	 *
-	 * Defaults to "PASSWORD_PEPPERS" if omitted.
-	 */
-	pepperEnv?: string;
+			/**
+			 * Env var that contains comma-separated peppers (newest first).
+			 * Example value: "pepper_v2,pepper_v1"
+			 *
+			 * Defaults to "PASSWORD_PEPPERS" if omitted.
+			 */
+			pepperEnv: string;
 
-	policy?: PasswordPolicy;
-	allowSignup?: boolean;
+			policy?: PasswordPolicy;
+			allowSignup: boolean;
 
-	turnstile?: TurnstileCfg;
-};
+			turnstile?: TurnstileCfg;
+	  }
+	| { enabled: false };
 
 /* =========================================
  * Overrides
@@ -174,6 +182,18 @@ export type PasswordAuthCfg = {
 export type ConfigOverrides = {
 	staticAssetRegex?: RegExp;
 	globalUnauthenticatedRedirectUrl?: string;
+
+	accountApproval: {
+		enabled: boolean;
+	};
+	emailVerification:
+		| {
+				enabled: true;
+				requiredForLogin: boolean;
+		  }
+		| { enabled: false; requiredForLogin?: false };
+
+	autoLoginAfterSignup: boolean;
 };
 
 /* =========================================
@@ -186,7 +206,7 @@ export type PropagationCfg = {
 	hmacSecretEnv: string;
 };
 
-type StoreBackend = { kind: 'kv'; kv: KVNamespace } | { kind: 'postgres'; hyperdrive: Hyperdrive };
+type StoreBackend = { kind: 'postgres'; hyperdrive: Hyperdrive };
 
 export type UserStoreCfg = StoreBackend & {
 	shortStateKV: KVNamespace;
@@ -220,6 +240,7 @@ export interface UserStore {
 	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
 	getUserRoles(userId: string): Promise<SystemRole[]>;
+	getUserStates(userId: string): Promise<DB['user_states'] | null>;
 
 	createUserWithPassword(emailLower: string, passwordHash: string): Promise<string>;
 	getPasswordHashByUserId(userId: string): Promise<string | null>;
