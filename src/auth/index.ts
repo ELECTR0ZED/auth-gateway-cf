@@ -313,7 +313,7 @@ export class AuthRouter {
 	}
 
 	private async passwordRegister(request: Request, url: URL): Promise<Response> {
-		if (!this.cfg.passwordAuth.enabled) {
+		if (!this.cfg.passwordAuth.enabled || !this.cfg.passwordAuth.allowSignup) {
 			return new Response('Not Found', { status: 404 });
 		}
 
