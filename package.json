@@ -1,6 +1,6 @@
 {
 	"name": "@electr0zed/auth-gateway-cf",
-	"version": "2.1.6-alpha",
+	"version": "2.2.6-alpha",
 	"type": "module",
 	"sideEffects": false,
 	"files": [
