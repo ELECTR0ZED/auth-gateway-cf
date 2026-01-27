@@ -2,7 +2,7 @@
  * Routing / Gateway
  * =======================================*/
 
-import { DB } from './stores/postgres';
+import type { DB } from './stores/postgres';
 
 export type Match = { path: string | RegExp; methods?: string[] };
 
