@@ -654,10 +654,10 @@ export class AuthRouter {
 	private canAutoLoginAfterSignup(): boolean {
 		const overrides = this.cfg.overrides;
 
-		if (!overrides?.autoLoginAfterSignup) return false;
-		if (overrides.accountApproval?.enabled) return false;
+		if (overrides?.autoLoginAfterSignup === false) return false;
+		if (overrides?.accountApproval?.enabled) return false;
 
-		const ev = overrides.emailVerification;
+		const ev = overrides?.emailVerification;
 		if (ev?.enabled && ev.requiredForLogin) return false;
 
 		return true;

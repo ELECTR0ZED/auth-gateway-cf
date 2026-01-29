@@ -26,7 +26,7 @@ export interface DB {
 
 		is_email_verified: boolean;
 		email_verified_at: Date | null;
-		email_verification_token: string | null;
+		email_verification_token_hash: string | null;
 
 		created_at: Date;
 		updated_at: Date;
@@ -230,7 +230,7 @@ export class PostgresUserStore implements UserStore {
 
 				is_email_verified: false,
 				email_verified_at: null,
-				email_verification_token: null,
+				email_verification_token_hash: null,
 
 				created_at: new Date(),
 				updated_at: new Date(),
