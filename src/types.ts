@@ -127,6 +127,8 @@ export type OAuthCfg =
 			enabled: true;
 			providers: ProviderConfig[];
 			defaultProvider: LoginProviderId;
+			successRedirectUrl: string;
+			failureRedirectUrl: string;
 	  }
 	| { enabled: false };
 
@@ -191,13 +193,19 @@ export type ConfigOverrides = {
 				enabled: true;
 				requiredForLogin: boolean;
 		  }
-		| { enabled: false; requiredForLogin?: false };
+		| { enabled: false };
 
 	autoLoginAfterSignup: boolean;
 	captureUsername:
 		| {
 				enabled: true;
-				missingUsernameMethod: 'generate' | 'reject' | 'ignore';
+				required: true;
+				generateFunction?: (email: string) => string;
+				minLength?: number;
+		  }
+		| {
+				enabled: true;
+				required: false;
 				minLength?: number;
 		  }
 		| { enabled: false };
@@ -244,12 +252,16 @@ export interface UserCore {
 export interface UserStore {
 	findUserIdByIdentity(issuer: string, subject: string): Promise<string | null>;
 	findUserIdByEmail(emailLower: string): Promise<string | null>;
-	createUserWithIdentity(emailLower: string, identity: { provider: string; issuer: string; subject: string }): Promise<string>;
+	createUserWithIdentity(
+		emailLower: string,
+		identity: { provider: string; issuer: string; subject: string },
+		generateUsernameFunc?: (email: string) => string,
+	): Promise<string>;
 	addIdentityToUser(userId: string, identity: { provider: string; issuer: string; subject: string }): Promise<void>;
 	getUserRoles(userId: string): Promise<SystemRole[]>;
 	getUserStates(userId: string): Promise<DB['user_states'] | null>;
 
-	createUserWithPassword(emailLower: string, passwordHash: string): Promise<string>;
+	createUserWithPassword(emailLower: string, passwordHash: string, username?: string | null): Promise<string>;
 	getPasswordHashByUserId(userId: string): Promise<string | null>;
 	getUserIdByEmailForPassword(emailLower: string): Promise<{ userId: string; passwordHash: string } | null>;
 	setPasswordHash(userId: string, passwordHash: string): Promise<void>;

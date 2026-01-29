@@ -80,10 +80,32 @@ export class PostgresUserStore implements UserStore {
 		return row?.id ?? null;
 	}
 
-	async createUserWithIdentity(email: string, identity: { provider: string; issuer: string; subject: string }): Promise<string> {
+	async createUserWithIdentity(
+		email: string,
+		identity: { provider: string; issuer: string; subject: string },
+		generateUsernameFunc?: (email: string) => string,
+	): Promise<string> {
 		return this.db.transaction().execute(async (trx) => {
+			if (await this.checkEmailExists(email)) {
+				throw new Error('email_in_use');
+			}
+			let username: string | null = null;
+			if (generateUsernameFunc) {
+				let attempts = 0;
+				while (attempts < 5) {
+					const generated = generateUsernameFunc(email);
+					if (!(await this.checkUsernameExists(generated))) {
+						username = generated;
+						break;
+					}
+					attempts++;
+				}
+				if (!username) {
+					throw new Error('username_generation_failed');
+				}
+			}
 			// 1) Create-or-detect user by email
-			const insertedUser = await this.createUser(trx, email);
+			const insertedUser = await this.createUser(trx, email, username);
 
 			const userId = insertedUser?.id;
 			if (!userId) {
@@ -166,10 +188,10 @@ export class PostgresUserStore implements UserStore {
 		return row || null;
 	}
 
-	async createUser(trx: Transaction<DB>, email: string): Promise<{ id: string } | undefined> {
+	async createUser(trx: Transaction<DB>, email: string, username: string | null = null): Promise<{ id: string } | undefined> {
 		return trx
 			.insertInto('users')
-			.values({ email })
+			.values({ email, username })
 			.onConflict((oc) => oc.column('email').doNothing())
 			.returning(['id'])
 			.executeTakeFirst();
@@ -199,10 +221,17 @@ export class PostgresUserStore implements UserStore {
 			.execute();
 	}
 
-	async createUserWithPassword(email: string, passwordHash: string): Promise<string> {
+	async createUserWithPassword(email: string, passwordHash: string, username: string | null = null): Promise<string> {
 		return this.db.transaction().execute(async (trx) => {
+			if (await this.checkEmailExists(email)) {
+				throw new Error('email_in_use');
+			}
+			if (username && (await this.checkUsernameExists(username))) {
+				throw new Error('username_in_use');
+			}
+
 			// Create user (email unique). If it already exists -> account_exists
-			const insertedUser = await this.createUser(trx, email);
+			const insertedUser = await this.createUser(trx, email, username);
 			const userId = insertedUser?.id;
 			if (!userId) {
 				throw new Error('account_exists');
@@ -255,6 +284,16 @@ export class PostgresUserStore implements UserStore {
 				}),
 			)
 			.execute();
+	}
+
+	async checkUsernameExists(username: string): Promise<boolean> {
+		const row = await this.db.selectFrom('users').select('id').where('username', '=', username).executeTakeFirst();
+		return !!row;
+	}
+
+	async checkEmailExists(email: string): Promise<boolean> {
+		const row = await this.db.selectFrom('users').select('id').where('email', '=', email).executeTakeFirst();
+		return !!row;
 	}
 
 	async destroy(): Promise<void> {
