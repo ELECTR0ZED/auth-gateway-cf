@@ -217,8 +217,11 @@ export class AuthRouter {
 					generateUsernameFunc,
 				);
 			} catch (e: unknown) {
-				const code = (e as Error)?.message === 'account_exists' ? 'account_exists' : 'signup_failed';
-				return this.redirectError(code, shortStateReturnTo);
+				const code = (e as Error)?.message;
+				if (['email_in_use', 'username_in_use', 'account_exists', 'username_generation_failed'].includes(code)) {
+					return this.redirectError(code, shortStateReturnTo);
+				}
+				return this.redirectError('signup_failed', shortStateReturnTo);
 			}
 
 			// Auto-login after signup if enabled and no further steps required (like email verification or account approval)
@@ -249,10 +252,6 @@ export class AuthRouter {
 			});
 			await this.applyIssuedCookies(response, { userId, email, systemRoles: [] });
 			return response;
-		}
-
-		if (!byIdentity) {
-			return this.redirectError('identity_not_found', shortStateReturnTo);
 		}
 
 		const checkStates = await this.checkUserStates(byIdentity);
@@ -332,7 +331,7 @@ export class AuthRouter {
 
 		return new Response(null, {
 			status: 302,
-			headers: { Location: `'/'?auth_error=${code}` },
+			headers: { Location: `/?auth_error=${code}` },
 		});
 	}
 
@@ -416,8 +415,8 @@ export class AuthRouter {
 			userId = await this.store.createUserWithPassword(email, passwordHash, username);
 		} catch (err: unknown) {
 			const errorMessage = (err as Error).message;
-			if (errorMessage === 'account_exists') {
-				return json({ error: 'account_exists' }, { status: 400 });
+			if (['email_in_use', 'username_in_use', 'account_exists'].includes(errorMessage)) {
+				return json({ error: errorMessage }, { status: 400 });
 			}
 
 			return json({ error: 'signup_failed' }, { status: 500 });
@@ -575,7 +574,7 @@ export class AuthRouter {
 
 		// Reject login when email verification is enabled, required for login, and the user's email is unverified
 		if (this.cfg.overrides?.emailVerification?.enabled) {
-			if (userStates?.is_email_verified === false && this.cfg.overrides.emailVerification.requiredForLogin) {
+			if (userStates?.is_email_verified === false && this.cfg.overrides?.emailVerification?.requiredForLogin) {
 				return { success: false, reason: 'email_unverified' };
 			}
 		}
@@ -653,13 +652,13 @@ export class AuthRouter {
 	}
 
 	private canAutoLoginAfterSignup(): boolean {
-		if (!this.cfg.overrides?.autoLoginAfterSignup) return false;
+		const overrides = this.cfg.overrides;
 
-		if (this.cfg.overrides.accountApproval.enabled) return false;
+		if (!overrides?.autoLoginAfterSignup) return false;
+		if (overrides.accountApproval?.enabled) return false;
 
-		if (this.cfg.overrides.emailVerification.enabled && this.cfg.overrides.emailVerification.requiredForLogin) {
-			return false;
-		}
+		const ev = overrides.emailVerification;
+		if (ev?.enabled && ev.requiredForLogin) return false;
 
 		return true;
 	}

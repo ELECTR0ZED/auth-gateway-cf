@@ -15,6 +15,8 @@ defineConfig({
 				clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
 			},
 		],
+		successRedirectUrl: '/',
+		failureRedirectUrl: '/error',
 	},
 	passwordAuth: {
 		enabled: true,
@@ -74,7 +76,8 @@ defineConfig({
 		autoLoginAfterSignup: true,
 		captureUsername: {
 			enabled: true,
-			missingUsernameMethod: 'generate',
+			required: false,
+			minLength: 5,
 		},
 	},
 });
