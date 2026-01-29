@@ -1,6 +1,6 @@
 import type { UserStore } from '../types';
 import { Pool } from 'pg';
-import { Kysely, PostgresDialect, Transaction, type Generated } from 'kysely';
+import { Kysely, PostgresDialect, type Transaction, type Generated } from 'kysely';
 
 // --- DB shape for Kysely type-safety ---
 // Mark DB-populated columns as Generated<...> so inserts don't require them.

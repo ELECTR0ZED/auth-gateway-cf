@@ -9,6 +9,14 @@ export const validateEmail = (email: string): boolean => {
 	return emailRegex.test(email);
 };
 
+export const usernameRegex = /^[A-Za-z0-9_-]+$/;
+
+export const normUsername = (u: string) => u.trim();
+
+export const validateUsername = (username: string): boolean => {
+	return usernameRegex.test(username);
+};
+
 export const STATIC_ASSET_RE = /\.(?:css|js|mjs|png|jpg|jpeg|gif|webp|svg|ico|woff2?|ttf|otf)$/i;
 
 export const generateUsername = (_: string): string => {

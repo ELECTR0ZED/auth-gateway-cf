@@ -1,7 +1,7 @@
 import type { ProjectConfig, UserStore, SessionStrategy, Session, ProviderConfig } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
-import { generateUsername, normEmail, validateEmail } from '../utils/helpers';
+import { generateUsername, normEmail, normUsername, validateEmail, validateUsername } from '../utils/helpers';
 import { safeReturnTo } from '../utils/returnTo';
 import { json } from '../utils/http';
 import { makeCsrfToken, csrfCookie, sameOrigin, requireCsrfJson } from '../utils/csrf';
@@ -168,10 +168,31 @@ export class AuthRouter {
 			return this.redirectError('email_required', shortStateReturnTo);
 		}
 
+		// Link flow
+		if (info.mode === 'link') {
+			if (!activeSession) {
+				return this.redirectError('link_requires_login', shortStateReturnTo);
+			}
+			try {
+				await this.store.addIdentityToUser(activeSession.userId, {
+					provider: identity.provider,
+					issuer: identity.issuer,
+					subject: identity.subject,
+				});
+			} catch (e: unknown) {
+				const code = (e as Error)?.message === 'identity_taken' ? 'identity_taken' : 'link_failed';
+				return this.redirectError(code, shortStateReturnTo);
+			}
+			return new Response(null, {
+				status: 302,
+				headers: { Location: shortStateReturnTo || successRedirectUrl || '/' },
+			});
+		}
+
 		const byIdentity = await this.store.findUserIdByIdentity(identity.issuer, identity.subject);
 
 		// Sign-up flow
-		if (!byIdentity && info.mode !== 'link') {
+		if (!byIdentity) {
 			const byEmail = await this.store.findUserIdByEmail(email);
 			if (byEmail) {
 				return this.redirectError('account_exists', shortStateReturnTo);
@@ -237,27 +258,6 @@ export class AuthRouter {
 		const checkStates = await this.checkUserStates(byIdentity);
 		if (!checkStates.success) {
 			return this.redirectError(checkStates.reason, shortStateReturnTo);
-		}
-
-		// Link flow
-		if (info.mode === 'link') {
-			if (!activeSession) {
-				return this.redirectError('link_requires_login', shortStateReturnTo);
-			}
-			try {
-				await this.store.addIdentityToUser(activeSession.userId, {
-					provider: identity.provider,
-					issuer: identity.issuer,
-					subject: identity.subject,
-				});
-			} catch (e: unknown) {
-				const code = (e as Error)?.message === 'identity_taken' ? 'identity_taken' : 'link_failed';
-				return this.redirectError(code, shortStateReturnTo);
-			}
-			return new Response(null, {
-				status: 302,
-				headers: { Location: shortStateReturnTo || successRedirectUrl || '/' },
-			});
 		}
 
 		// Login flow
@@ -367,12 +367,12 @@ export class AuthRouter {
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
 
-		const username = typeof usernameRaw === 'string' ? usernameRaw.trim() : null;
-
 		// Basic validation
 		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length === 0) {
 			return json({ error: 'invalid_request' }, { status: 400 });
 		}
+
+		const username = typeof usernameRaw === 'string' ? normUsername(usernameRaw) : null;
 
 		// Conditional username validation
 		if (this.cfg.overrides?.captureUsername.enabled) {
@@ -381,6 +381,12 @@ export class AuthRouter {
 			}
 			if (username && username.length < (this.cfg.overrides.captureUsername.minLength || 0)) {
 				return json({ error: 'username_too_short' }, { status: 400 });
+			}
+			if (username) {
+				const isUsernameValid = validateUsername(username);
+				if (!isUsernameValid) {
+					return json({ error: 'invalid_username' }, { status: 400 });
+				}
 			}
 		}
 
@@ -561,14 +567,14 @@ export class AuthRouter {
 		}
 
 		// Check if approval is enabled and user is unapproved then reject login
-		if (this.cfg.overrides?.accountApproval.enabled) {
+		if (this.cfg.overrides?.accountApproval?.enabled) {
 			if (userStates?.is_approved === false) {
 				return { success: false, reason: 'account_unapproved' };
 			}
 		}
 
 		// Reject login when email verification is enabled, required for login, and the user's email is unverified
-		if (this.cfg.overrides?.emailVerification.enabled) {
+		if (this.cfg.overrides?.emailVerification?.enabled) {
 			if (userStates?.is_email_verified === false && this.cfg.overrides.emailVerification.requiredForLogin) {
 				return { success: false, reason: 'email_unverified' };
 			}
