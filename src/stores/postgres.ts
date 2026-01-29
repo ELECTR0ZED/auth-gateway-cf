@@ -1,15 +1,35 @@
 import type { UserStore } from '../types';
 import { Pool } from 'pg';
-import { Kysely, PostgresDialect, type Generated } from 'kysely';
+import { Kysely, PostgresDialect, type Transaction, type Generated } from 'kysely';
 
 // --- DB shape for Kysely type-safety ---
 // Mark DB-populated columns as Generated<...> so inserts don't require them.
-interface DB {
+export interface DB {
 	users: {
 		id: Generated<string>; // uuid DEFAULT uuid_generate_v4()
+		username: string | null; // unique, nullable
 		email: string; // unique
 		system_roles: Generated<string[]>; // text[]
 		created_at: Generated<Date>; // DEFAULT now()
+		last_login_at: Date | null;
+	};
+	user_states: {
+		user_id: string;
+
+		is_disabled: boolean;
+		disabled_at: Date | null;
+		disabled_by: string | null;
+
+		is_approved: boolean;
+		approved_at: Date | null;
+		approved_by: string | null;
+
+		is_email_verified: boolean;
+		email_verified_at: Date | null;
+		email_verification_token_hash: string | null;
+
+		created_at: Date;
+		updated_at: Date;
 	};
 	user_identities: {
 		id: Generated<number>; // bigserial
@@ -60,41 +80,39 @@ export class PostgresUserStore implements UserStore {
 		return row?.id ?? null;
 	}
 
-	async createUserWithIdentity(email: string, identity: { provider: string; issuer: string; subject: string }): Promise<string> {
+	async createUserWithIdentity(
+		email: string,
+		identity: { provider: string; issuer: string; subject: string },
+		generateUsernameFunc?: (email: string) => string,
+	): Promise<string> {
 		return this.db.transaction().execute(async (trx) => {
-			// 1) Idempotency: if identity already exists, return its user.
-			const existing = await trx
-				.selectFrom('user_identities as ui')
-				.innerJoin('users as u', 'u.id', 'ui.user_id')
-				.select(['u.id'])
-				.where('ui.issuer', '=', identity.issuer)
-				.where('ui.subject', '=', identity.subject)
-				.executeTakeFirst();
-
-			if (existing?.id) {
-				return existing.id;
+			if (await this.checkEmailExists(email)) {
+				throw new Error('email_in_use');
 			}
-
-			// 2) Create-or-detect user by email
-			const insertedUser = await trx
-				.insertInto('users')
-				.values({ email })
-				.onConflict((oc) => oc.column('email').doNothing())
-				.returning(['id'])
-				.executeTakeFirst();
+			let username: string | null = null;
+			if (generateUsernameFunc) {
+				let attempts = 0;
+				while (attempts < 5) {
+					const generated = generateUsernameFunc(email);
+					if (!(await this.checkUsernameExists(generated))) {
+						username = generated;
+						break;
+					}
+					attempts++;
+				}
+				if (!username) {
+					throw new Error('username_generation_failed');
+				}
+			}
+			// 1) Create-or-detect user by email
+			const insertedUser = await this.createUser(trx, email, username);
 
 			const userId = insertedUser?.id;
 			if (!userId) {
-				// No row inserted → email already exists. Confirm and throw account_exists.
-				const existingUser = await trx.selectFrom('users').select(['id']).where('email', '=', email).executeTakeFirst();
-
-				if (existingUser?.id) {
-					throw new Error('account_exists');
-				}
-				throw new Error('signup_failed');
+				throw new Error('account_exists');
 			}
 
-			// 3) Bind identity. If (issuer, subject) owned by another user, fail.
+			// 2) Bind identity. If (issuer, subject) owned by another user, fail.
 			const insertedIdentity = await trx
 				.insertInto('user_identities')
 				.values({
@@ -121,6 +139,9 @@ export class PostgresUserStore implements UserStore {
 				}
 				// else already linked to this user → idempotent
 			}
+
+			// 3) Create user_states row
+			await this.createUserStates(trx, userId);
 
 			return userId;
 		});
@@ -161,22 +182,79 @@ export class PostgresUserStore implements UserStore {
 		return row?.system_roles ?? [];
 	}
 
-	async createUserWithPassword(email: string, passwordHash: string): Promise<string> {
-		return this.db.transaction().execute(async (trx) => {
-			// Create user (email unique). If it already exists -> account_exists
-			const insertedUser = await trx
+	async getUserStates(userId: string): Promise<DB['user_states'] | null> {
+		const row = await this.db.selectFrom('user_states').selectAll().where('user_id', '=', userId).executeTakeFirst();
+
+		return row || null;
+	}
+
+	async createUser(trx: Transaction<DB>, email: string, username: string | null = null): Promise<{ id: string } | undefined> {
+		try {
+			return await trx
 				.insertInto('users')
-				.values({ email })
+				.values({ email, username })
 				.onConflict((oc) => oc.column('email').doNothing())
 				.returning(['id'])
 				.executeTakeFirst();
+		} catch (err: unknown) {
+			// Normalize unique-constraint violations so callers can distinguish causes.
+			// Postgres uses SQLSTATE '23505' for unique_violation errors.
+			if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
+				const constraint: unknown = 'constraint' in err ? (err as { constraint: string }).constraint : undefined;
+				if (typeof constraint === 'string') {
+					if (constraint.includes('email')) {
+						throw new Error('email_in_use');
+					}
+					if (constraint.includes('username')) {
+						throw new Error('username_in_use');
+					}
+				}
+			}
+			throw err;
+		}
+	}
 
+	async createUserStates(trx: Transaction<DB>, userId: string): Promise<void> {
+		await trx
+			.insertInto('user_states')
+			.values({
+				user_id: userId,
+
+				is_disabled: false,
+				disabled_at: null,
+				disabled_by: null,
+
+				is_approved: false,
+				approved_at: null,
+				approved_by: null,
+
+				is_email_verified: false,
+				email_verified_at: null,
+				email_verification_token_hash: null,
+
+				created_at: new Date(),
+				updated_at: new Date(),
+			})
+			.execute();
+	}
+
+	async createUserWithPassword(email: string, passwordHash: string, username: string | null = null): Promise<string> {
+		return this.db.transaction().execute(async (trx) => {
+			if (await this.checkEmailExists(email)) {
+				throw new Error('email_in_use');
+			}
+			if (username && (await this.checkUsernameExists(username))) {
+				throw new Error('username_in_use');
+			}
+
+			// Create user (email unique). If it already exists -> account_exists
+			const insertedUser = await this.createUser(trx, email, username);
 			const userId = insertedUser?.id;
 			if (!userId) {
 				throw new Error('account_exists');
 			}
 
-			// Attach password hash (should succeed; user_id PK)
+			// Set password
 			await trx
 				.insertInto('user_passwords')
 				.values({
@@ -184,6 +262,9 @@ export class PostgresUserStore implements UserStore {
 					password_hash: passwordHash,
 				})
 				.execute();
+
+			// Create user_states row
+			await this.createUserStates(trx, userId);
 
 			return userId;
 		});
@@ -220,6 +301,16 @@ export class PostgresUserStore implements UserStore {
 				}),
 			)
 			.execute();
+	}
+
+	async checkUsernameExists(username: string): Promise<boolean> {
+		const row = await this.db.selectFrom('users').select('id').where('username', '=', username).executeTakeFirst();
+		return !!row;
+	}
+
+	async checkEmailExists(email: string): Promise<boolean> {
+		const row = await this.db.selectFrom('users').select('id').where('email', '=', email).executeTakeFirst();
+		return !!row;
 	}
 
 	async destroy(): Promise<void> {

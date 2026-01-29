@@ -15,10 +15,13 @@ defineConfig({
 				clientSecretEnv: 'GOOGLE_CLIENT_SECRET',
 			},
 		],
+		successRedirectUrl: '/',
+		failureRedirectUrl: '/error',
 	},
 	passwordAuth: {
 		enabled: true,
 		pepperEnv: 'PASSWORD_PEPPERS',
+		allowSignup: true,
 		turnstile: {
 			enabled: true,
 			secretEnv: 'TURNSTILE_SECRET',
@@ -63,5 +66,18 @@ defineConfig({
 	],
 	overrides: {
 		globalUnauthenticatedRedirectUrl: '/custom-login',
+		accountApproval: {
+			enabled: true,
+		},
+		emailVerification: {
+			enabled: true,
+			requiredForLogin: true,
+		},
+		autoLoginAfterSignup: true,
+		captureUsername: {
+			enabled: true,
+			required: false,
+			minLength: 5,
+		},
 	},
 });

@@ -1,6 +1,6 @@
 {
 	"name": "@electr0zed/auth-gateway-cf",
-	"version": "2.1.6-alpha",
+	"version": "2.0.0-alpha",
 	"type": "module",
 	"sideEffects": false,
 	"files": [
@@ -21,7 +21,8 @@
 	},
 	"dependencies": {
 		"kysely": "^0.28.10",
-		"pg": "^8.17.2"
+		"pg": "^8.17.2",
+		"unique-names-generator": "^4.7.1"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20251014.0",

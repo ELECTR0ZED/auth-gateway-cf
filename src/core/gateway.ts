@@ -40,7 +40,6 @@ export class Gateway {
 
 		// Common static asset extensions (tight allow-list)
 		const staticAssetRegex = this.cfg.overrides?.staticAssetRegex || STATIC_ASSET_RE;
-
 		const isStaticAsset = staticAssetRegex.test(url.pathname);
 
 		// Enforce auth if route requires it

@@ -82,6 +82,8 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 	}
 
 	clear() {
+		// TODO: inform the Durable Object to delete the session data
+		// Invalidate the cookie by setting it to expire immediately
 		return {
 			cookie: `${this.cfg.cookieName ?? '__Host-sid'}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
 		};

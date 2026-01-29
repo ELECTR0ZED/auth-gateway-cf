@@ -1,7 +1,7 @@
 import type { ProjectConfig, UserStore, SessionStrategy, Session, ProviderConfig } from '../types';
 import { makePkceState, saveShortState, consumeShortState } from './pkceState';
 import { ProviderRegistry } from '../providers';
-import { normEmail, validateEmail } from '../utils/helpers';
+import { generateUsername, normEmail, normUsername, validateEmail, validateUsername } from '../utils/helpers';
 import { safeReturnTo } from '../utils/returnTo';
 import { json } from '../utils/http';
 import { makeCsrfToken, csrfCookie, sameOrigin, requireCsrfJson } from '../utils/csrf';
@@ -150,7 +150,12 @@ export class AuthRouter {
 		const code = url.searchParams.get('code')!;
 		const state = url.searchParams.get('state')!;
 		const { verifier, info } = await consumeShortState(this.cfg.userStore.shortStateKV, state);
+		if (info.provider && info.provider !== cfg.id) {
+			return this.redirectError('provider_mismatch', safeReturnTo(info.returnTo, this.cfg.publicBaseUrl));
+		}
+
 		const shortStateReturnTo = safeReturnTo(info.returnTo, this.cfg.publicBaseUrl);
+		const successRedirectUrl = this.cfg.oAuth.enabled ? this.cfg.oAuth.successRedirectUrl : undefined;
 
 		const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
 		const identity = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);
@@ -163,6 +168,7 @@ export class AuthRouter {
 			return this.redirectError('email_required', shortStateReturnTo);
 		}
 
+		// Link flow
 		if (info.mode === 'link') {
 			if (!activeSession) {
 				return this.redirectError('link_requires_login', shortStateReturnTo);
@@ -179,51 +185,90 @@ export class AuthRouter {
 			}
 			return new Response(null, {
 				status: 302,
-				headers: { Location: shortStateReturnTo || '/' },
+				headers: { Location: shortStateReturnTo || successRedirectUrl || '/' },
 			});
 		}
 
-		// login / signup
 		const byIdentity = await this.store.findUserIdByIdentity(identity.issuer, identity.subject);
-		if (byIdentity) {
+
+		// Sign-up flow
+		if (!byIdentity) {
+			const byEmail = await this.store.findUserIdByEmail(email);
+			if (byEmail) {
+				return this.redirectError('account_exists', shortStateReturnTo);
+			}
+
+			let generateUsernameFunc: ((email: string) => string) | undefined = undefined;
+			if (this.cfg.overrides?.captureUsername?.enabled) {
+				if (this.cfg.overrides.captureUsername.required) {
+					generateUsernameFunc = this.cfg.overrides?.captureUsername.generateFunction || generateUsername;
+				}
+			}
+
+			let userId: string;
+			try {
+				userId = await this.store.createUserWithIdentity(
+					email,
+					{
+						provider: identity.provider,
+						issuer: identity.issuer,
+						subject: identity.subject,
+					},
+					generateUsernameFunc,
+				);
+			} catch (e: unknown) {
+				const code = (e as Error)?.message;
+				if (['email_in_use', 'username_in_use', 'account_exists', 'username_generation_failed'].includes(code)) {
+					return this.redirectError(code, shortStateReturnTo);
+				}
+				return this.redirectError('signup_failed', shortStateReturnTo);
+			}
+
+			// Auto-login after signup if enabled and no further steps required (like email verification or account approval)
+			const canAutoLogin = this.canAutoLoginAfterSignup();
+			if (!canAutoLogin) {
+				const requiresEmailVerification =
+					this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin;
+				const requiresAccountApproval = this.cfg.overrides?.accountApproval?.enabled;
+				const redirectUrl = successRedirectUrl || '/';
+				const sep = redirectUrl.includes('?') ? '&' : '?';
+				return new Response(null, {
+					status: 302,
+					headers: {
+						Location:
+							redirectUrl +
+							(requiresEmailVerification
+								? `${sep}next=verify_email`
+								: requiresAccountApproval
+									? `${sep}next=awaiting_approval`
+									: ''),
+					},
+				});
+			}
+
 			const response = new Response(null, {
 				status: 302,
-				headers: { Location: shortStateReturnTo || '/' },
+				headers: { Location: shortStateReturnTo || successRedirectUrl || '/' },
 			});
-			const systemRoles = await this.store.getUserRoles(byIdentity);
-			const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
-			if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
-			if (issued?.accessJwt)
-				response.headers.append(
-					'Set-Cookie',
-					`__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`,
-				);
+			await this.applyIssuedCookies(response, { userId, email, systemRoles: [] });
 			return response;
 		}
 
-		const byEmail = await this.store.findUserIdByEmail(email);
-		if (byEmail) {
-			return this.redirectError('account_exists', shortStateReturnTo);
+		const checkStates = await this.checkUserStates(byIdentity);
+		if (!checkStates.success) {
+			return this.redirectError(checkStates.reason, shortStateReturnTo);
 		}
 
-		let userId: string;
-		try {
-			userId = await this.store.createUserWithIdentity(email, {
-				provider: identity.provider,
-				issuer: identity.issuer,
-				subject: identity.subject,
-			});
-		} catch (e: unknown) {
-			const code = (e as Error)?.message === 'account_exists' ? 'account_exists' : 'signup_failed';
-			return this.redirectError(code, shortStateReturnTo);
-		}
-
+		// Login flow
 		const response = new Response(null, {
 			status: 302,
-			headers: { Location: shortStateReturnTo || '/' },
+			headers: { Location: shortStateReturnTo || successRedirectUrl || '/' },
 		});
-		const systemRoles = await this.store.getUserRoles(userId);
-		await this.applyIssuedCookies(response, { userId, email, systemRoles });
+		const systemRoles = await this.store.getUserRoles(byIdentity);
+		const issued = await this.strat.issue?.({ userId: byIdentity, email: email, systemRoles }, this.env);
+		if (issued?.cookie) response.headers.append('Set-Cookie', issued.cookie);
+		if (issued?.accessJwt)
+			response.headers.append('Set-Cookie', `__Host-access=${issued.accessJwt}; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=900`);
 		return response;
 	}
 
@@ -251,6 +296,7 @@ export class AuthRouter {
 	 * @returns {{ impl: any; cfg: any; }}
 	 */
 	private pickProvider(explicit?: string) {
+		if (!this.cfg.oAuth.enabled) throw new Error('OAuth is disabled');
 		const providers = this.cfg.oAuth.providers ?? [];
 		const id = explicit || this.cfg.oAuth.defaultProvider || providers.find((p) => p.enabled)?.id;
 
@@ -272,10 +318,17 @@ export class AuthRouter {
 	 * @returns {*}
 	 */
 	private redirectError(code: string, returnTo?: string) {
+		const failureRedirectUrl = this.cfg.oAuth.enabled ? this.cfg.oAuth.failureRedirectUrl : undefined;
+		if (failureRedirectUrl) {
+			const sep = failureRedirectUrl.includes('?') ? '&' : '?';
+			return Response.redirect(`${failureRedirectUrl}${sep}auth_error=${code}`, 302);
+		}
+
 		if (returnTo) {
 			const sep = returnTo.includes('?') ? '&' : '?';
 			return Response.redirect(`${returnTo}${sep}auth_error=${code}`, 302);
 		}
+
 		return new Response(null, {
 			status: 302,
 			headers: { Location: `/?auth_error=${code}` },
@@ -290,33 +343,60 @@ export class AuthRouter {
 	}
 
 	private async passwordRegister(request: Request, url: URL): Promise<Response> {
-		if (!this.passwordSignupAllowed()) {
+		// Reject if signup is disabled
+		if (!this.cfg.passwordAuth.enabled || !this.cfg.passwordAuth.allowSignup) {
 			return new Response('Not Found', { status: 404 });
 		}
 
+		// Enforce same-origin policy for signup - currently required to read cookies (such as CSRF)
 		if (!sameOrigin(request, this.cfg.publicBaseUrl)) {
 			return new Response('Forbidden', { status: 403 });
 		}
 
+		// Parse and validate request body
 		const parsed = await requireCsrfJson<Record<string, unknown>>(request);
 		if (!parsed.ok) return json({ error: parsed.code }, { status: 400 });
 
+		// Verify turnstile if enabled, will pass if disabled
 		const ts = await this.requireTurnstile(request, parsed.body);
 		if (!ts.ok) return json({ error: ts.code }, { status: 401 });
 
+		// Extract fields
+		const usernameRaw = parsed.body.username;
 		const emailRaw = parsed.body.email;
 		const password = parsed.body.password;
 
+		// Basic validation
 		if (typeof emailRaw !== 'string' || typeof password !== 'string' || password.length === 0) {
 			return json({ error: 'invalid_request' }, { status: 400 });
 		}
 
+		const username = typeof usernameRaw === 'string' ? normUsername(usernameRaw) : null;
+
+		// Conditional username validation
+		if (this.cfg.overrides?.captureUsername?.enabled) {
+			if (this.cfg.overrides.captureUsername.required && (!username || username.length === 0)) {
+				return json({ error: 'username_required' }, { status: 400 });
+			}
+			if (username && username.length < (this.cfg.overrides.captureUsername.minLength || 0)) {
+				return json({ error: 'username_too_short' }, { status: 400 });
+			}
+			if (username) {
+				const isUsernameValid = validateUsername(username);
+				if (!isUsernameValid) {
+					return json({ error: 'invalid_username' }, { status: 400 });
+				}
+			}
+		}
+
+		// Normalize and validate email
 		const email = normEmail(emailRaw);
 		const isEmailValid = validateEmail(email);
 		if (!isEmailValid) {
 			return json({ error: 'invalid_email' }, { status: 400 });
 		}
 
+		// Validate password against policy
 		const policy = getPasswordPolicy(this.cfg.passwordAuth?.policy);
 		const check = validatePassword(password, policy);
 		if (!check.ok) {
@@ -324,21 +404,39 @@ export class AuthRouter {
 			return json({ error: 'password_policy_violation' }, { status: 400 });
 		}
 
+		// Hash password with pepper
 		const peppers = getPeppers(this.env, this.pepperEnvName());
 		const primaryPepper = peppers[0];
 		const passwordHash = await hashPassword(password, primaryPepper ? { pepper: primaryPepper } : undefined);
 
+		// Create user account
 		let userId: string;
 		try {
-			userId = await this.store.createUserWithPassword(email, passwordHash);
+			userId = await this.store.createUserWithPassword(email, passwordHash, username);
 		} catch (err: unknown) {
-			if (err === 'account_exists' || (err instanceof Error && 'code' in err && err.code === 'account_exists')) {
-				return json({ error: 'account_exists' }, { status: 400 });
+			const errorMessage = (err as Error).message;
+			if (['email_in_use', 'username_in_use', 'account_exists'].includes(errorMessage)) {
+				return json({ error: errorMessage }, { status: 400 });
 			}
 
 			return json({ error: 'signup_failed' }, { status: 500 });
 		}
 
+		// Auto-login after signup if enabled and no further steps required (like email verification or account approval)
+		const canAutoLogin = this.canAutoLoginAfterSignup();
+		if (!canAutoLogin) {
+			return json(
+				{
+					success: true,
+					requiresEmailVerification:
+						this.cfg.overrides?.emailVerification?.enabled && this.cfg.overrides?.emailVerification?.requiredForLogin,
+					requiresAccountApproval: this.cfg.overrides?.accountApproval?.enabled,
+				},
+				{ status: 200 },
+			);
+		}
+
+		// Issue session and redirect to returnTo
 		const returnTo = safeReturnTo(url.searchParams.get('returnTo') || '/', this.cfg.publicBaseUrl);
 
 		const res = new Response(null, {
@@ -399,6 +497,11 @@ export class AuthRouter {
 			}
 		}
 
+		const checkStates = await this.checkUserStates(row.userId);
+		if (!checkStates.success) {
+			return json({ error: checkStates.reason }, { status: 403 });
+		}
+
 		const res = new Response(null, {
 			status: 302,
 			headers: { Location: returnTo || '/' },
@@ -452,6 +555,33 @@ export class AuthRouter {
 		return res;
 	}
 
+	async checkUserStates(
+		userId: string,
+	): Promise<{ success: true } | { success: false; reason: 'account_disabled' | 'account_unapproved' | 'email_unverified' }> {
+		const userStates = await this.store.getUserStates(userId);
+
+		// Reject disabled accounts always
+		if (userStates?.is_disabled) {
+			return { success: false, reason: 'account_disabled' };
+		}
+
+		// Check if approval is enabled and user is unapproved then reject login
+		if (this.cfg.overrides?.accountApproval?.enabled) {
+			if (userStates?.is_approved === false) {
+				return { success: false, reason: 'account_unapproved' };
+			}
+		}
+
+		// Reject login when email verification is enabled, required for login, and the user's email is unverified
+		if (this.cfg.overrides?.emailVerification?.enabled) {
+			if (userStates?.is_email_verified === false && this.cfg.overrides?.emailVerification?.requiredForLogin) {
+				return { success: false, reason: 'email_unverified' };
+			}
+		}
+
+		return { success: true };
+	}
+
 	private async applyIssuedCookies(res: Response, session: Session) {
 		const issued = await this.strat.issue?.(session, this.env);
 		if (issued?.cookie) res.headers.append('Set-Cookie', issued.cookie);
@@ -461,7 +591,7 @@ export class AuthRouter {
 	}
 
 	private oauthEnabled(): boolean {
-		return this.cfg.oAuth?.enabled !== false; // default ON for backwards compatibility
+		return this.cfg.oAuth?.enabled === true;
 	}
 
 	private passwordEnabled(): boolean {
@@ -473,22 +603,23 @@ export class AuthRouter {
 	}
 
 	private pepperEnvName(): string {
+		if (!this.cfg.passwordAuth?.enabled) return 'PASSWORD_PEPPERS';
 		return this.cfg.passwordAuth?.pepperEnv ?? 'PASSWORD_PEPPERS';
 	}
 
 	private passwordPolicy() {
+		if (!this.cfg.passwordAuth?.enabled) return getPasswordPolicy();
 		return getPasswordPolicy(this.cfg.passwordAuth?.policy);
 	}
 
-	private passwordSignupAllowed(): boolean {
-		return this.cfg.passwordAuth?.allowSignup === true;
-	}
-
 	private turnstileEnabled(): boolean {
+		if (!this.cfg.passwordAuth?.enabled) return false;
 		return this.cfg.passwordAuth?.turnstile?.enabled === true;
 	}
 
 	private turnstileSecret(): string | null {
+		if (!this.cfg.passwordAuth?.enabled) return null;
+		if (!this.cfg.passwordAuth?.turnstile?.enabled) return null;
 		const key = this.cfg.passwordAuth?.turnstile?.secretEnv;
 		if (!key) return null;
 		const v = this.env[key];
@@ -496,6 +627,8 @@ export class AuthRouter {
 	}
 
 	private turnstileTokenField(): string {
+		if (!this.cfg.passwordAuth?.enabled) return 'turnstileToken';
+		if (!this.cfg.passwordAuth?.turnstile?.enabled) return 'turnstileToken';
 		return getTurnstileTokenField(this.cfg.passwordAuth?.turnstile);
 	}
 
@@ -518,20 +651,25 @@ export class AuthRouter {
 		return { ok: true };
 	}
 
+	private canAutoLoginAfterSignup(): boolean {
+		const overrides = this.cfg.overrides;
+
+		if (overrides?.autoLoginAfterSignup === false) return false;
+		if (overrides?.accountApproval?.enabled) return false;
+
+		const ev = overrides?.emailVerification;
+		if (ev?.enabled && ev.requiredForLogin) return false;
+
+		return true;
+	}
+
 	getGlobalUnauthenticatedRedirectUrl(): string {
 		return this.cfg.overrides?.globalUnauthenticatedRedirectUrl || '/auth/login';
 	}
 
-	createUnauthenticatedRedirect(url: string, returnTo?: string, customRedirectUrl?: string): Response {
-		const baseUrl = new URL(url);
-		let returnToParam: string = '';
-		if (returnTo) {
-			returnToParam = `?returnTo=${encodeURIComponent(returnTo)}`;
-		}
-
-		return Response.redirect(
-			new URL(customRedirectUrl || this.getGlobalUnauthenticatedRedirectUrl(), baseUrl).toString() + returnToParam,
-			302,
-		);
+	createUnauthenticatedRedirect(base: string, returnTo?: string, redirectTo?: string): Response {
+		const target = new URL(redirectTo || this.getGlobalUnauthenticatedRedirectUrl(), base);
+		if (returnTo) target.searchParams.set('returnTo', returnTo);
+		return Response.redirect(target.toString(), 302);
 	}
 }
