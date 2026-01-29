@@ -189,12 +189,29 @@ export class PostgresUserStore implements UserStore {
 	}
 
 	async createUser(trx: Transaction<DB>, email: string, username: string | null = null): Promise<{ id: string } | undefined> {
-		return trx
-			.insertInto('users')
-			.values({ email, username })
-			.onConflict((oc) => oc.column('email').doNothing())
-			.returning(['id'])
-			.executeTakeFirst();
+		try {
+			return await trx
+				.insertInto('users')
+				.values({ email, username })
+				.onConflict((oc) => oc.column('email').doNothing())
+				.returning(['id'])
+				.executeTakeFirst();
+		} catch (err: unknown) {
+			// Normalize unique-constraint violations so callers can distinguish causes.
+			// Postgres uses SQLSTATE '23505' for unique_violation errors.
+			if (err && typeof err === 'object' && 'code' in err && (err as { code: string }).code === '23505') {
+				const constraint: unknown = 'constraint' in err ? (err as { constraint: string }).constraint : undefined;
+				if (typeof constraint === 'string') {
+					if (constraint.includes('email')) {
+						throw new Error('email_in_use');
+					}
+					if (constraint.includes('username')) {
+						throw new Error('username_in_use');
+					}
+				}
+			}
+			throw err;
+		}
 	}
 
 	async createUserStates(trx: Transaction<DB>, userId: string): Promise<void> {

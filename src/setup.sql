@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS user_states (
 
     is_email_verified BOOLEAN NOT NULL DEFAULT FALSE,
     email_verified_at TIMESTAMPTZ,
-    email_verification_token TEXT,
+    email_verification_token_hash TEXT,
 
     created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT now()

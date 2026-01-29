@@ -165,8 +165,6 @@ export type PasswordAuthCfg =
 			/**
 			 * Env var that contains comma-separated peppers (newest first).
 			 * Example value: "pepper_v2,pepper_v1"
-			 *
-			 * Defaults to "PASSWORD_PEPPERS" if omitted.
 			 */
 			pepperEnv: string;
 
@@ -185,18 +183,18 @@ export type ConfigOverrides = {
 	staticAssetRegex?: RegExp;
 	globalUnauthenticatedRedirectUrl?: string;
 
-	accountApproval: {
+	accountApproval?: {
 		enabled: boolean;
 	};
-	emailVerification:
+	emailVerification?:
 		| {
 				enabled: true;
 				requiredForLogin: boolean;
 		  }
 		| { enabled: false };
 
-	autoLoginAfterSignup: boolean;
-	captureUsername:
+	autoLoginAfterSignup?: boolean;
+	captureUsername?:
 		| {
 				enabled: true;
 				required: true;
