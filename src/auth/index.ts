@@ -199,7 +199,7 @@ export class AuthRouter {
 			}
 
 			let generateUsernameFunc: ((email: string) => string) | undefined = undefined;
-			if (this.cfg.overrides?.captureUsername.enabled) {
+			if (this.cfg.overrides?.captureUsername?.enabled) {
 				if (this.cfg.overrides.captureUsername.required) {
 					generateUsernameFunc = this.cfg.overrides?.captureUsername.generateFunction || generateUsername;
 				}
@@ -374,7 +374,7 @@ export class AuthRouter {
 		const username = typeof usernameRaw === 'string' ? normUsername(usernameRaw) : null;
 
 		// Conditional username validation
-		if (this.cfg.overrides?.captureUsername.enabled) {
+		if (this.cfg.overrides?.captureUsername?.enabled) {
 			if (this.cfg.overrides.captureUsername.required && (!username || username.length === 0)) {
 				return json({ error: 'username_required' }, { status: 400 });
 			}
