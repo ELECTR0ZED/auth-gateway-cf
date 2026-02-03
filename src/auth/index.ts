@@ -70,7 +70,7 @@ export class AuthRouter {
 			case '/auth/callback':
 				return this.callback(request, url);
 			case '/auth/logout':
-				return this.logout();
+				return this.logout(request);
 			case '/auth/csrf':
 				return this.csrf();
 			case '/auth/password/signup':
@@ -276,14 +276,15 @@ export class AuthRouter {
 	 * Handles user logout.
 	 *
 	 * @private
-	 * @returns {Response}
+	 * @param {Request} request
+	 * @returns {Promise<Response>}
 	 */
-	private logout(): Response {
+	private async logout(request: Request): Promise<Response> {
 		const r = new Response(null, {
 			status: 302,
 			headers: { Location: '/' },
 		});
-		const cleared = this.strat.clear?.();
+		const cleared = await this.strat.clear?.(request, this.env);
 		if (cleared?.cookie) r.headers.append('Set-Cookie', cleared.cookie);
 		return r;
 	}

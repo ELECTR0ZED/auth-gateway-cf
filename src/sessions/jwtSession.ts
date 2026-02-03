@@ -42,7 +42,7 @@ export class JwtSessionStrategy implements SessionStrategy {
 		};
 	}
 
-	clear() {
+	async clear(_request: Request, _env: Env) {
 		return {
 			cookie: `${this.cfg.cookieName ?? '__Host-session'}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
 		};

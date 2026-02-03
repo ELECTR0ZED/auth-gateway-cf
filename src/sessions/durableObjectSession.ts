@@ -81,8 +81,25 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 		};
 	}
 
-	clear() {
-		// TODO: inform the Durable Object to delete the session data
+	async clear(request: Request, _env: Env) {
+		// Get the session ID from the cookie
+		const sid = getCookie(request, this.cfg.cookieName ?? '__Host-sid');
+
+		// If there's a session ID, inform the Durable Object to delete the session data
+		if (sid) {
+			try {
+				const stub = this.cfg.doName.getByName(sid);
+				await stub.fetch('https://do/session', {
+					method: 'POST',
+					headers: { 'content-type': 'application/json' },
+					body: JSON.stringify({ op: 'delete' }),
+				});
+			} catch (error) {
+				// Silently fail if we can't delete from the DO - still clear the cookie
+				console.error('Failed to delete session from Durable Object:', error);
+			}
+		}
+
 		// Invalidate the cookie by setting it to expire immediately
 		return {
 			cookie: `${this.cfg.cookieName ?? '__Host-sid'}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
