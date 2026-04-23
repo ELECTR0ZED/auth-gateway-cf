@@ -57,18 +57,3 @@ Can be found at src/config.example.ts
 * UI (e.g. `/sign-in`) should be handled separately
 * Public env vars (e.g. Turnstile site key) are set at build time
 * Worker secrets are configured via Wrangler
-
----
-
-## Run
-
-```bash
-npm install
-npm run dev
-```
-
-Deploy:
-
-```bash
-wrangler deploy
-```
