@@ -26,7 +26,7 @@ jobs:
             package.json
           retention-days: 1
 
-  publish-gpr:
+  publish-npm:
     needs: build
     runs-on: ubuntu-latest
     permissions:
