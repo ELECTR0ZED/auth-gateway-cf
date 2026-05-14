@@ -1,3 +1,5 @@
+import { JwtPayload } from '../types';
+
 /**
  * Converts a byte array to a base64url-encoded string.
  *
@@ -48,11 +50,11 @@ function b64urlDecodeUtf8(u: string): string {
  *
  * @export
  * @async
- * @param {Record<string, string | number>} payload
+ * @param {JwtPayload} payload
  * @param {string} secret
  * @returns {Promise<string>}
  */
-export async function signJwtHS256(payload: Record<string, string | number>, secret: string): Promise<string> {
+export async function signJwtHS256(payload: JwtPayload, secret: string): Promise<string> {
 	if (!secret) {
 		throw new Error('Missing JWT Secret');
 	}
@@ -75,9 +77,9 @@ export async function signJwtHS256(payload: Record<string, string | number>, sec
  * @async
  * @param {string} token
  * @param {string} secret
- * @returns {Promise<Record<string, string | number>>}
+ * @returns {Promise<JwtPayload>}
  */
-export async function verifyJwtHS256(token: string, secret: string): Promise<Record<string, string | number>> {
+export async function verifyJwtHS256(token: string, secret: string): Promise<JwtPayload> {
 	if (!secret) {
 		throw new Error('Missing JWT Secret');
 	}

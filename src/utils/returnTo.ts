@@ -2,7 +2,9 @@ export function safeReturnTo(returnTo: string | undefined, publicBaseUrl: string
 	if (!returnTo) return undefined;
 
 	// Allow only same-origin relative paths by default
-	if (returnTo.startsWith('/')) return returnTo;
+	if (returnTo.startsWith('/') && !returnTo.startsWith('//')) {
+		return returnTo;
+	}
 
 	// Optional: allow absolute URLs only if same origin
 	try {

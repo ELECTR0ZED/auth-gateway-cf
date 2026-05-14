@@ -11,6 +11,7 @@ import { STATIC_ASSET_RE } from '../utils/helpers';
 export class Gateway {
 	private auth: AuthRouter;
 	private strat: SessionStrategy;
+	private matcher: RouteMatcher;
 
 	constructor(
 		private env: Env,
@@ -19,6 +20,7 @@ export class Gateway {
 		const store = makeUserStore(cfg.userStore);
 		this.strat = makeSessionStrategy(cfg.session);
 		this.auth = new AuthRouter(cfg, env, store, this.strat);
+		this.matcher = new RouteMatcher(cfg.routes);
 	}
 
 	async fetch(request: Request): Promise<Response> {
@@ -30,7 +32,7 @@ export class Gateway {
 		}
 
 		// Match route
-		const rule = new RouteMatcher(this.cfg.routes).match(url, request.method);
+		const rule = this.matcher.match(url, request.method);
 		if (!rule) {
 			return new Response('Route not configured', { status: 501 });
 		}

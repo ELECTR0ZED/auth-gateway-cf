@@ -115,7 +115,7 @@ export type Session = {
 export interface SessionStrategy {
 	resolve(request: Request, env: Env): Promise<{ session: Session | null; accessJwt?: string }>;
 	issue?(session: Session, env: Env): Promise<{ cookie?: string; accessJwt?: string }>;
-	clear?(): { cookie: string };
+	clear?(request: Request, env: Env): Promise<{ cookie: string }>;
 }
 
 /* =========================================
@@ -304,3 +304,13 @@ declare global {
 		[key: string]: string | undefined;
 	}
 }
+
+/* =========================================
+ * Others
+ * =======================================*/
+
+export type JwtPrimitive = string | number | boolean | null;
+
+export type JwtValue = JwtPrimitive | JwtValue[] | { [key: string]: JwtValue };
+
+export type JwtPayload = Record<string, JwtValue>;

@@ -70,7 +70,7 @@ export class AuthRouter {
 			case '/auth/callback':
 				return this.callback(request, url);
 			case '/auth/logout':
-				return this.logout();
+				return this.logout(request);
 			case '/auth/csrf':
 				return this.csrf();
 			case '/auth/password/signup':
@@ -147,18 +147,32 @@ export class AuthRouter {
 		}
 		const { impl, cfg } = picked;
 
-		const code = url.searchParams.get('code')!;
-		const state = url.searchParams.get('state')!;
-		const { verifier, info } = await consumeShortState(this.cfg.userStore.shortStateKV, state);
-		if (info.provider && info.provider !== cfg.id) {
-			return this.redirectError('provider_mismatch', safeReturnTo(info.returnTo, this.cfg.publicBaseUrl));
+		const oauthError = url.searchParams.get('error');
+		if (oauthError) {
+			return this.redirectError('oauth_denied', returnTo);
 		}
 
-		const shortStateReturnTo = safeReturnTo(info.returnTo, this.cfg.publicBaseUrl);
+		const code = url.searchParams.get('code');
+		const state = url.searchParams.get('state');
+		if (!code || !state) {
+			return this.redirectError('invalid_callback', returnTo);
+		}
+
+		let consumedState;
+		try {
+			consumedState = await consumeShortState(this.cfg.userStore.shortStateKV, state);
+		} catch {
+			return this.redirectError('state_invalid_or_expired', returnTo);
+		}
+		if (consumedState.info.provider && consumedState.info.provider !== cfg.id) {
+			return this.redirectError('provider_mismatch', safeReturnTo(consumedState.info.returnTo, this.cfg.publicBaseUrl));
+		}
+
+		const shortStateReturnTo = safeReturnTo(consumedState.info.returnTo, this.cfg.publicBaseUrl);
 		const successRedirectUrl = this.cfg.oAuth.enabled ? this.cfg.oAuth.successRedirectUrl : undefined;
 
 		const redirectUri = `${this.cfg.publicBaseUrl}/auth/callback`;
-		const identity = await impl.exchangeCode(cfg, this.env, code, verifier, redirectUri);
+		const identity = await impl.exchangeCode(cfg, this.env, code, consumedState.verifier, redirectUri);
 
 		const resolved = await this.strat.resolve(request, this.env);
 		const activeSession = resolved.session;
@@ -169,7 +183,7 @@ export class AuthRouter {
 		}
 
 		// Link flow
-		if (info.mode === 'link') {
+		if (consumedState.info.mode === 'link') {
 			if (!activeSession) {
 				return this.redirectError('link_requires_login', shortStateReturnTo);
 			}
@@ -278,12 +292,12 @@ export class AuthRouter {
 	 * @private
 	 * @returns {Response}
 	 */
-	private logout(): Response {
+	private async logout(request: Request): Promise<Response> {
 		const r = new Response(null, {
 			status: 302,
 			headers: { Location: '/' },
 		});
-		const cleared = this.strat.clear?.();
+		const cleared = await this.strat.clear?.(request, this.env);
 		if (cleared?.cookie) r.headers.append('Set-Cookie', cleared.cookie);
 		return r;
 	}

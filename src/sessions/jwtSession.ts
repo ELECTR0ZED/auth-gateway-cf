@@ -16,6 +16,7 @@ export class JwtSessionStrategy implements SessionStrategy {
 				session: {
 					userId: payload.sub,
 					email: payload.email,
+					systemRoles: payload.systemRoles,
 				} as Session,
 			};
 		} catch {
@@ -30,6 +31,7 @@ export class JwtSessionStrategy implements SessionStrategy {
 			{
 				sub: session.userId,
 				email: session.email,
+				systemRoles: session.systemRoles,
 				iat: now,
 				nbf: now - 30,
 				exp: now + expMinutes * 60,
@@ -42,7 +44,7 @@ export class JwtSessionStrategy implements SessionStrategy {
 		};
 	}
 
-	clear() {
+	async clear(_request: Request, _env: Env) {
 		return {
 			cookie: `${this.cfg.cookieName ?? '__Host-session'}=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax`,
 		};
