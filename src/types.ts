@@ -4,11 +4,15 @@
 
 import type { DB } from './stores/postgres';
 
-export type Match = { path: string | RegExp; methods?: string[] };
+export type RouteMatch = {
+	path: string | RegExp;
+	host?: string | RegExp;
+	methods?: string[];
+};
 
 export type RouteRule = {
 	name?: string;
-	match: Match | Match[];
+	match: RouteMatch | RouteMatch[];
 	auth: 'required' | 'none';
 	requireRolesAny?: string[];
 	requireRolesAll?: string[];
