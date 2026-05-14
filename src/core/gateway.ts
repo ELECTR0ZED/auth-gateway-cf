@@ -83,6 +83,11 @@ export class Gateway {
 		// Clone headers
 		const fwdHeaders = new Headers(headers);
 
+		// Add standard forwarding headers
+		fwdHeaders.set('X-Forwarded-Host', url.host);
+		fwdHeaders.set('X-Forwarded-Proto', url.protocol.replace(':', ''));
+		fwdHeaders.set('X-Original-URL', url.pathname + url.search);
+
 		// Defensive: strip body-related headers for methods that cannot have a body
 		if (!canHaveBody) {
 			fwdHeaders.delete('content-length');
