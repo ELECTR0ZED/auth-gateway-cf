@@ -94,9 +94,8 @@ export class DurableObjectSessionStrategy implements SessionStrategy {
 					headers: { 'content-type': 'application/json' },
 					body: JSON.stringify({ op: 'delete' }),
 				});
-			} catch (error) {
+			} catch (_) {
 				// Silently fail if we can't delete from the DO - still clear the cookie
-				console.error('Failed to delete session from Durable Object:', error);
 			}
 		}
 
